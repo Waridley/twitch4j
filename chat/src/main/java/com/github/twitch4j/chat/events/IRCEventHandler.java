@@ -19,6 +19,7 @@ import java.util.Map;
  */
 @Getter
 public class IRCEventHandler {
+<<<<<<< HEAD
     
     /**
      * Twitch Client
@@ -38,6 +39,159 @@ public class IRCEventHandler {
     public IRCEventHandler(TwitchChat twitchChat) {
         this.twitchChat = twitchChat;
         this.eventManager = twitchChat.getEventManager();
+=======
+
+	/**
+	 * Twitch Client
+	 */
+	private final TwitchChat twitchChat;
+
+	/**
+	 * Event Manager
+	 */
+	private final EventManager eventManager;
+
+	/**
+	 * Constructor
+	 *
+	 * @param twitchChat The Twitch Chat instance
+	 */
+	public IRCEventHandler(TwitchChat twitchChat) {
+		this.twitchChat = twitchChat;
+		this.eventManager = twitchChat.getEventManager();
+
+		// event consumers
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannelMessage(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onWhisper(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannelCheer(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannelSubscription(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onClearChat(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannnelClientJoinEvent(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannnelClientLeaveEvent(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannelModChange(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onNoticeEvent(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onHostOnEvent(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onHostOffEvent(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onChannelState(event));
+        eventManager.onEvent(IRCMessageEvent.class).subscribe(event -> onRaid(event));
+	}
+
+	/**
+	 * ChatChannel Message Event
+	 * @param event IRCMessageEvent
+	 */
+	public void onChannelMessage(IRCMessageEvent event) {
+		if(event.getCommandType().equals("PRIVMSG")) {
+			if(!event.getTags().containsKey("bits") && event.getMessage().isPresent()) {
+				// Load Info
+				EventChannel channel = event.getChannel();
+				EventUser user = event.getUser();
+
+				// Dispatch Event
+				if(event.getMessage().get().startsWith("\u0001ACTION ")) {
+					// Action
+                    eventManager.dispatchEvent(new ChannelMessageActionEvent(channel, user, event.getMessage().get().substring(8), event.getClientPermissions()));
+				} else {
+					// Regular Message
+                    eventManager.dispatchEvent(new ChannelMessageEvent(channel, user, event.getMessage().get(), event.getClientPermissions()));
+				}
+			}
+		}
+	}
+
+	/**
+	 * Whisper Event
+	 * @param event IRCMessageEvent
+	 */
+	public void onWhisper(IRCMessageEvent event) {
+		if(event.getCommandType().equals("WHISPER")) {
+			// Load Info
+			EventUser user = event.getUser();
+
+			// Dispatch Event
+            eventManager.dispatchEvent(new PrivateMessageEvent(user, event.getMessage().get(), event.getClientPermissions()));
+		}
+	}
+
+	/**
+	 * ChatChannel Cheer (Bits) Event
+	 * @param event IRCMessageEvent
+	 */
+	public void onChannelCheer(IRCMessageEvent event) {
+		if(event.getCommandType().equals("PRIVMSG")) {
+			if(event.getTags().containsKey("bits")) {
+				// Load Info
+				EventChannel channel = event.getChannel();
+                EventUser user = event.getUser();
+				String message = event.getMessage().orElse("");
+				Integer bits = Integer.parseInt(event.getTags().get("bits"));
+
+				// Dispatch Event
+                eventManager.dispatchEvent(new CheerEvent(channel, user, message, bits));
+			}
+		}
+	}
+
+	/**
+	 * ChatChannel Subscription Event
+	 * @param event IRCMessageEvent
+	 */
+	public void onChannelSubscription(IRCMessageEvent event) {
+		if (event.getCommandType().equals("USERNOTICE") && event.getTags().containsKey("msg-id")) {
+			// Sub
+			if(event.getTags().get("msg-id").equalsIgnoreCase("sub") || event.getTags().get("msg-id").equalsIgnoreCase("resub")) {
+				// Load Info
+				EventChannel channel = event.getChannel();
+                EventUser user = event.getUser();
+				String subPlan = event.getTagValue("msg-param-sub-plan").get();
+				boolean isResub = event.getTags().get("msg-id").equalsIgnoreCase("resub");
+				Integer cumulativeMonths = (event.getTags().containsKey("msg-param-cumulative-months")) ? Integer.parseInt(event.getTags().get("msg-param-cumulative-months")) : 0;
+                                //according to the Twitch docs, msg-param-months is used only for giftsubs, which are handled below
+
+				// twitch sometimes returns 0 months for new subs
+				if(cumulativeMonths == 0) {
+					cumulativeMonths = 1;
+				}
+                                
+                                // check user's sub streak
+                                // Twitch API specifies that 0 is returned if the user chooses not to share their streak
+                                Integer streak = event.getTags().containsKey("msg-param-streak-months") ? Integer.parseInt(event.getTags().get("msg-param-streak-months")) : 0;
+
+				// Dispatch Event
+                eventManager.dispatchEvent(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), cumulativeMonths, false, null, streak));
+			}
+			// Receive Gifted Sub
+			else if(event.getTags().get("msg-id").equalsIgnoreCase("subgift")) {
+				// Load Info
+				EventChannel channel = event.getChannel();
+                EventUser user = new EventUser(Long.parseLong(event.getTagValue("msg-param-recipient-id").get()), event.getTagValue("msg-param-recipient-user-name").get());
+                EventUser giftedBy = event.getUser();
+				String subPlan = event.getTagValue("msg-param-sub-plan").get();
+				Integer subStreak = (event.getTags().containsKey("msg-param-months")) ? Integer.parseInt(event.getTags().get("msg-param-months")) : 1;
+
+				// twitch sometimes returns 0 months for new subs
+				if(subStreak == 0) {
+					subStreak = 1;
+				}
+
+				// Dispatch Event
+                eventManager.dispatchEvent(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), subStreak, true, giftedBy, 0));
+			}
+			// Gift X Subs
+			else if(event.getTags().get("msg-id").equalsIgnoreCase("submysterygift")) {
+				// Load Info
+				EventChannel channel = event.getChannel();
+                EventUser user = event.getUser();
+				String subPlan = event.getTagValue("msg-param-sub-plan").get();
+				Integer subsGifted = (event.getTags().containsKey("msg-param-mass-gift-count")) ? Integer.parseInt(event.getTags().get("msg-param-mass-gift-count")) : 0;
+				Integer subsGiftedTotal = (event.getTags().containsKey("msg-param-sender-count")) ? Integer.parseInt(event.getTags().get("msg-param-sender-count")) : 0;
+
+				// Dispatch Event
+                eventManager.dispatchEvent(new GiftSubscriptionsEvent(channel, user, subPlan, subsGifted, subsGiftedTotal));
+			}
+		}
+	}
+>>>>>>> parent of ea3dcc7... Merge remote-tracking branch 'remotes/upstream/develop'
         
         eventManager.onEvent(IRCMessageEvent.class).subscribe(this::onRawEvent);
         
