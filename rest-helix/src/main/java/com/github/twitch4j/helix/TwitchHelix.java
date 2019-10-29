@@ -671,10 +671,22 @@ public interface TwitchHelix {
         @Param("before") String before,
         @Param("first") Integer limit
     );
-
-
+    
     /**
-     * TODO: Get Webhook Subscriptions
+     * Get Webhook Subscriptions
+     * <p>
+     * Gets the Webhook subscriptions of a user identified by a Bearer token, in order of expiration.
+     *
+     * The response has a JSON payload with a data field containing an array of subscription elements and a pagination field containing information required to query for more subscriptions.
+     *
+     * @param after    Cursor for forward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
+     * @param limit    Number of values to be returned when getting videos by user or game ID. Limit: 100. Default: 20.
+     * @return VideoList
      */
-
+    @RequestLine("GET /webhooks/subscriptions?after={after}&first={first}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<WebhookSubscriptionList> getWebhookSubscriptions(
+        @Param("after") String after,
+        @Param("first") String limit
+    );
 }
