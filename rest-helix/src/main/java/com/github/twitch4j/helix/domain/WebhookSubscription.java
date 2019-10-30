@@ -30,17 +30,8 @@ public class WebhookSubscription {
     private String expires_at;
     
     /**
-     *	A cursor value, to be used in a subsequent request to specify the starting point of the next set of results. If this is empty, you are at the last page.
-     */
-    private String pagination;
-    
-    /**
      *  The topic used in the initial subscription.
      */
     private String topic;
     
-    /**
-     *  A hint at the total number of results returned, on all pages. Note this is an approximation: as you page through the list, some subscriptions may expire and others may be added.
-     */
-    private int total;
 }

@@ -22,7 +22,7 @@ import java.util.List;
 public class WebhookSubscriptionList {
     
     @JsonProperty("data")
-    private List<WebhookSubscription> follows;
+    private List<WebhookSubscription> subscriptions;
     
     /**
      * Total number of items returned.

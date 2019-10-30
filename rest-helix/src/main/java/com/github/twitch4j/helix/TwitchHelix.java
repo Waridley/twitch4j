@@ -679,14 +679,16 @@ public interface TwitchHelix {
      *
      * The response has a JSON payload with a data field containing an array of subscription elements and a pagination field containing information required to query for more subscriptions.
      *
+     * @param authToken User or App auth Token, for increased rate-limits
      * @param after    Cursor for forward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
      * @param limit    Number of values to be returned when getting videos by user or game ID. Limit: 100. Default: 20.
-     * @return VideoList
+     * @return WebhookSubscriptionList
      */
     @RequestLine("GET /webhooks/subscriptions?after={after}&first={first}")
     @Headers("Authorization: Bearer {token}")
     HystrixCommand<WebhookSubscriptionList> getWebhookSubscriptions(
+        @Param("token") String authToken,
         @Param("after") String after,
-        @Param("first") String limit
+        @Param("first") Integer limit
     );
 }
