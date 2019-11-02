@@ -29,9 +29,8 @@ public class WebhookSubscription {
      */
     private String expires_at;
     
-    
     /**
-     *  The topic used in the initial subscription.
+     *  The topic URL used in the initial subscription.
      */
     private String topic;
     
