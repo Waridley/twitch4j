@@ -14,6 +14,8 @@ import java.util.*;
 @Getter
 public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
     
+    public static final String PATH = "/moderation/banned/events";
+    
     /**
      * @return The ID of the channel for which to monitor ban events.
      */
@@ -32,7 +34,7 @@ public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
      */
 	public ChannelBanTopic(@NonNull String broadcasterId, String userId) {
 		super(
-            "/moderation/banned/events",
+            PATH,
             ModeratorEventList.class,
             Arrays.asList(
                 new Pair<String, Object>("broadcaster_id", broadcasterId),

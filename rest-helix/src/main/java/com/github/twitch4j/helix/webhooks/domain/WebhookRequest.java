@@ -1,6 +1,7 @@
 package com.github.twitch4j.helix.webhooks.domain;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.github.twitch4j.helix.webhooks.topics.TwitchWebhookTopic;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NonNull;
@@ -9,6 +10,9 @@ import lombok.NonNull;
 @AllArgsConstructor
 public class WebhookRequest {
 	
+    public static final String MODE_SUBSCRIBE = "subscribe";
+    public static final String MODE_UNSUBSCRIBE = "unsubscribe";
+    
 	/**
 	 * Callback URL
 	 */
@@ -45,4 +49,7 @@ public class WebhookRequest {
 	@JsonProperty("hub.secret")
 	private String secret;
 	
+	public WebhookRequest(@NonNull String callback, @NonNull String mode, @NonNull TwitchWebhookTopic topic, Integer leaseSeconds, String secret) {
+	    this(callback, mode, topic.toString(), leaseSeconds, secret);
+    }
 }

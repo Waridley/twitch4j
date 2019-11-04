@@ -13,6 +13,8 @@ import java.util.Optional;
 @Getter
 public class FollowsTopic extends TwitchWebhookTopic<FollowList> {
     
+    public static final String PATH = "/users/follows";
+    
     /**
      * @return The user who starts following someone.
      */
@@ -32,7 +34,7 @@ public class FollowsTopic extends TwitchWebhookTopic<FollowList> {
      */
 	public FollowsTopic(String fromId, String toId) {
 		super(
-		    "/users/follows",
+		    PATH,
             FollowList.class,
             Arrays.asList(
                 new Pair<String, Object>("first", 1),

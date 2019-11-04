@@ -14,6 +14,8 @@ import java.util.Optional;
 @Getter
 public class ModeratorChangeTopic extends TwitchWebhookTopic<ModeratorEventList> {
     
+    public static final String PATH = "/moderation/moderators/events";
+    
     /**
      * @return The user ID of the broadcaster.
      */
@@ -32,7 +34,7 @@ public class ModeratorChangeTopic extends TwitchWebhookTopic<ModeratorEventList>
      */
 	public ModeratorChangeTopic(@NonNull String broadcasterId, String userId) {
 		super(
-		    "/moderation/moderators/events",
+		    PATH,
             ModeratorEventList.class,
             Arrays.asList(
                 new Pair<String, Object>("broadcaster_id", broadcasterId),

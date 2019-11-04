@@ -18,6 +18,8 @@ import java.util.Optional;
 @Getter
 public class ChannelSubscriptionTopic extends TwitchWebhookTopic<SubscriptionList> {
     
+    public static final String PATH = "/subscriptions/events";
+    
     /**
      * @return The user ID of the broadcaster.
      */
@@ -40,7 +42,7 @@ public class ChannelSubscriptionTopic extends TwitchWebhookTopic<SubscriptionLis
      */
 	public ChannelSubscriptionTopic(@NonNull String broadcasterId, String userId) {
 		super(
-		    "/subscriptions/events",
+		    PATH,
             SubscriptionList.class,
             Arrays.asList(
                 new Pair<String, Object>("broadcaster_id", broadcasterId),

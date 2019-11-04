@@ -14,6 +14,8 @@ import java.util.Collections;
 @Getter
 public class StreamsTopic extends TwitchWebhookTopic<StreamList> {
     
+    public static final String PATH = "/streams";
+    
     /**
      * @return The user whose stream is monitored.
      */
@@ -22,15 +24,15 @@ public class StreamsTopic extends TwitchWebhookTopic<StreamList> {
     /**
      * Notifies when a stream changes; e.g., stream goes online or offline, the stream title changes, or the game changes.
      *
-     * @param channelId Specifies the user whose stream is monitored.
+     * @param userId Specifies the user whose stream is monitored.
      */
-	public StreamsTopic(@NonNull String channelId) {
+	public StreamsTopic(@NonNull String userId) {
 		super(
-		    "/streams",
+		    PATH,
             StreamList.class,
-            Collections.singletonList(new Pair<String, Object>("user_id", channelId))
+            Collections.singletonList(new Pair<String, Object>("user_id", userId))
         );
-		this.channelId = channelId;
+		this.channelId = userId;
 	}
 	
 }

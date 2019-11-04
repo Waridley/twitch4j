@@ -14,6 +14,8 @@ import java.util.Collections;
 @Getter
 public class UsersTopic extends TwitchWebhookTopic<UserList> {
     
+    public static final String PATH = "/users";
+    
     /**
      * @return The user whose data is monitored.
      */
@@ -27,7 +29,7 @@ public class UsersTopic extends TwitchWebhookTopic<UserList> {
      */
 	public UsersTopic(@NonNull String userId) {
 		super(
-		    "/users",
+		    PATH,
             UserList.class,
             Collections.singletonList(new Pair<String, Object>("id", userId))
         );

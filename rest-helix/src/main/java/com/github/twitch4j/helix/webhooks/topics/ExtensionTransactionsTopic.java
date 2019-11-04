@@ -13,6 +13,8 @@ import java.util.Arrays;
 @Getter
 public class ExtensionTransactionsTopic extends TwitchWebhookTopic<ExtensionTransactionList> {
     
+    public static final String PATH = "/extensions/transactions";
+    
     /**
      * @return The ID of the extension to listen to for transactions.
      */
@@ -25,7 +27,7 @@ public class ExtensionTransactionsTopic extends TwitchWebhookTopic<ExtensionTran
      */
 	public ExtensionTransactionsTopic(@NonNull String extensionId) {
 		super(
-		    "/extensions/transactions",
+		    PATH,
             ExtensionTransactionList.class,
             Arrays.asList(
                 new Pair<String, Object>("extension_id", extensionId),
