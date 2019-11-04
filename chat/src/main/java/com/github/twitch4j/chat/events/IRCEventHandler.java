@@ -290,11 +290,51 @@ public class IRCEventHandler {
 	public void onHostOnEvent(IRCMessageEvent event) {
 		if (event.getCommandType().equals("NOTICE")) {
             EventChannel channel = event.getChannel();
-			String messageId = event.getTagValue("msg-id").get();
-
-			if(messageId.equals("host_on")) {
-				String message = event.getMessage().get();
-				String targetChannelName = message.substring(12, message.length() - 1);
+            EventUser user = event.getUser();
+            
+            // Dispatch Event
+            if (channel != null && user != null) {
+                eventManager.dispatchEvent(new ChannelLeaveEvent(channel, user));
+            }
+        }
+    }
+    
+    /**
+     * Mod Status Change Event
+     * @param event IRCMessageEvent
+     */
+    public void onChannelModChange(IRCMessageEvent event) {
+        if(event.getCommandType().equals("MODE") && event.getPayload().isPresent()) {
+            // Recieving Mod Status
+            if(event.getPayload().get().substring(1).startsWith("o")) {
+                // Load Info
+                EventChannel channel = event.getChannel();
+                EventUser user = new EventUser(null, event.getPayload().get().substring(3));
+                
+                // Dispatch Event
+                eventManager.dispatchEvent(new ChannelModEvent(channel, user, event.getPayload().get().startsWith("+")));
+            }
+        }
+    }
+    
+    public void onNoticeEvent(IRCMessageEvent event) {
+        if (event.getCommandType().equals("NOTICE")) {
+            EventChannel channel = event.getChannel();
+            String messageId = event.getTagValue("msg-id").get();
+            String message = event.getMessage().get();
+            
+            eventManager.dispatchEvent(new ChannelNoticeEvent(channel, messageId, message));
+        }
+    }
+    
+    public void onHostOnEvent(IRCMessageEvent event) {
+        if (event.getCommandType().equals("NOTICE")) {
+            EventChannel channel = event.getChannel();
+            String messageId = event.getTagValue("msg-id").get();
+            
+            if(messageId.equals("host_on")) {
+                String message = event.getMessage().get();
+                String targetChannelName = message.substring(12, message.length() - 1);
                 EventChannel targetChannel = new EventChannel(null, targetChannelName);
                 eventManager.publish(new HostOnEvent(channel, targetChannel));
 			}
