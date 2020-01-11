@@ -1,7 +1,7 @@
 package com.github.twitch4j.pubsub;
 
 import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
-import com.github.philippheuer.events4j.EventManager;
+import com.github.philippheuer.events4j.core.EventManager;
 import com.github.twitch4j.common.events.domain.EventUser;
 import com.github.twitch4j.common.events.user.PrivateMessageEvent;
 import com.github.twitch4j.common.util.TimeUtils;
@@ -28,7 +28,7 @@ import java.util.*;
  * Twitch PubSub
  */
 @Slf4j
-public class TwitchPubSub {
+public class TwitchPubSub implements AutoCloseable {
 
     /**
      * EventManager
@@ -57,6 +57,11 @@ public class TwitchPubSub {
      * Command Queue Thread
      */
     protected final Thread queueThread;
+
+    /**
+     * is Closed?
+     */
+    protected boolean isClosed = false;
 
     /**
      * Command Queue
@@ -93,7 +98,7 @@ public class TwitchPubSub {
 
         // queue command worker
         this.queueThread = new Thread(() -> {
-            while (true) {
+            while (isClosed == false) {
                 try {
                     // check if we need to send a PING (every 4 minutes, disconnect after 5 minutes without sending ping)
                     if (TimeUtils.getCurrentTimeInMillis() - lastPing > 4 * 60 * 1000) {
@@ -236,7 +241,7 @@ public class TwitchPubSub {
                                 // Whisper
                                 EventUser eventUser = new EventUser((String) message.getData().getMessage().getMessageData().get("from_id"), (String) message.getData().getMessage().getMessageDataTags().get("display_name"));
                                 PrivateMessageEvent privateMessageEvent = new PrivateMessageEvent(eventUser, (String) message.getData().getMessage().getMessageData().get("body"), TwitchUtils.getPermissionsFromTags(message.getData().getMessage().getMessageDataTags()));
-                                eventManager.dispatchEvent(privateMessageEvent);
+                                eventManager.publish(privateMessageEvent);
                             } else {
                                 log.warn("Unparseable Message: " + message.getType() + "|" + message.getData());
                             }
@@ -378,6 +383,16 @@ public class TwitchPubSub {
         request.getData().put("topics", Arrays.asList("whispers." + userId.toString()));
 
         listenOnTopic(request);
+    }
+
+    /**
+     * Close
+     */
+    public void close() {
+        if (!isClosed) {
+            disconnect();
+            isClosed = true;
+        }
     }
 
 }
