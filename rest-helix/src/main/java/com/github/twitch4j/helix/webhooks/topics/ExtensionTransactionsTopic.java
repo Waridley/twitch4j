@@ -1,25 +1,31 @@
 package com.github.twitch4j.helix.webhooks.topics;
 
 import com.github.twitch4j.helix.domain.ExtensionTransactionList;
-import javafx.util.Pair;
 import lombok.Getter;
 import lombok.NonNull;
 
-import java.util.Arrays;
+import java.util.TreeMap;
 
 /**
  * Sends a notification when a new transaction is created for an extension.
  */
 @Getter
 public class ExtensionTransactionsTopic extends TwitchWebhookTopic<ExtensionTransactionList> {
-    
+
     public static final String PATH = "/extensions/transactions";
-    
+
+    private static TreeMap<String, Object> mapParameters(String extensionId) {
+        TreeMap<String, Object> parameterMap = new TreeMap<>();
+        parameterMap.put("extension_id", extensionId);
+        parameterMap.put("first", 1);
+        return parameterMap;
+    }
+
     /**
      * @return The ID of the extension to listen to for transactions.
      */
 	private final String extensionId;
-    
+
     /**
      * Sends a notification when a new transaction is created for an extension.
      *
@@ -29,12 +35,9 @@ public class ExtensionTransactionsTopic extends TwitchWebhookTopic<ExtensionTran
 		super(
 		    PATH,
             ExtensionTransactionList.class,
-            Arrays.asList(
-                new Pair<String, Object>("extension_id", extensionId),
-                new Pair<String, Object>("first", 1)
-            )
+            mapParameters(extensionId)
         );
 		this.extensionId = extensionId;
 	}
-	
+
 }

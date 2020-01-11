@@ -1,31 +1,38 @@
 package com.github.twitch4j.helix.webhooks.topics;
 
 import com.github.twitch4j.helix.domain.ModeratorEventList;
-import com.sun.javafx.UnmodifiableArrayList;
-import javafx.util.Pair;
 import lombok.Getter;
 import lombok.NonNull;
 
-import java.util.*;
+import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * Notifies when a broadcaster bans or un-bans people in their channel.
  */
 @Getter
 public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
-    
+
     public static final String PATH = "/moderation/banned/events";
-    
+
+    private static TreeMap<String, Object> mapParameters(String broadcasterId, String userId) {
+        TreeMap<String, Object> parameterMap = new TreeMap<>();
+        parameterMap.put("broadcaster_id", broadcasterId);
+        parameterMap.put("first", 1);
+        parameterMap.put("user_id", userId);
+        return parameterMap;
+    }
+
     /**
      * @return The ID of the channel for which to monitor ban events.
      */
 	private String broadcasterId;
-    
+
     /**
      * @return The user ID of the moderator added or removed.
      */
     private Optional<String> userId;
-    
+
     /**
      * Notifies when a broadcaster bans or un-bans people in their channel.
      *
@@ -36,14 +43,11 @@ public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
 		super(
             PATH,
             ModeratorEventList.class,
-            Arrays.asList(
-                new Pair<String, Object>("broadcaster_id", broadcasterId),
-                new Pair<String, Object>("first", 1),
-                new Pair<String, Object>("user_id", userId)
-            )
+            mapParameters(broadcasterId, userId)
         );
 		this.broadcasterId = broadcasterId;
 		this.userId = Optional.ofNullable(userId);
 	}
-	
+
+
 }

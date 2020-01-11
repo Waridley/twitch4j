@@ -3,7 +3,6 @@ package com.github.twitch4j.helix;
 import com.github.twitch4j.helix.domain.*;
 import com.github.twitch4j.helix.webhooks.domain.WebhookRequest;
 import com.netflix.hystrix.HystrixCommand;
-
 import feign.*;
 
 import java.util.Date;

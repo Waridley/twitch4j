@@ -1,26 +1,30 @@
 package com.github.twitch4j.helix.webhooks.topics;
 
 import com.github.twitch4j.helix.domain.StreamList;
-import javafx.util.Pair;
 import lombok.Getter;
 import lombok.NonNull;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.TreeMap;
 
 /**
  * Notifies when a stream changes; e.g., stream goes online or offline, the stream title changes, or the game changes.
  */
 @Getter
 public class StreamsTopic extends TwitchWebhookTopic<StreamList> {
-    
+
     public static final String PATH = "/streams";
-    
+
+    private static TreeMap<String, Object> mapParameters(String userId) {
+        TreeMap<String, Object> parameterMap = new TreeMap<>();
+        parameterMap.put("user_id", userId);
+        return parameterMap;
+    }
+
     /**
      * @return The user whose stream is monitored.
      */
 	private String channelId;
-    
+
     /**
      * Notifies when a stream changes; e.g., stream goes online or offline, the stream title changes, or the game changes.
      *
@@ -30,9 +34,9 @@ public class StreamsTopic extends TwitchWebhookTopic<StreamList> {
 		super(
 		    PATH,
             StreamList.class,
-            Collections.singletonList(new Pair<String, Object>("user_id", userId))
+            mapParameters(userId)
         );
 		this.channelId = userId;
 	}
-	
+
 }
