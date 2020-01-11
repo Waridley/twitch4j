@@ -3,7 +3,6 @@ package com.github.twitch4j.helix;
 import com.github.twitch4j.helix.domain.*;
 import com.github.twitch4j.helix.webhooks.domain.WebhookRequest;
 import com.netflix.hystrix.HystrixCommand;
-
 import feign.*;
 
 import java.util.Date;
@@ -86,7 +85,7 @@ public interface TwitchHelix {
         @Param("started_at") String startedAt,
         @Param("user_id") String userId
     );
-    
+
     /**
      * Get Extension Transactions allows extension back end servers to fetch a list of transactions that have occurred for their extension across all of Twitch.
      *
@@ -106,7 +105,7 @@ public interface TwitchHelix {
         @Param("after") String after,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Creates a clip programmatically. This returns both an ID and an edit URL for the new clip.
      *
@@ -692,7 +691,7 @@ public interface TwitchHelix {
         @Param("before") String before,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Get Webhook Subscriptions
      * <p>
@@ -712,7 +711,7 @@ public interface TwitchHelix {
         @Param("after") String after,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Subscribe to or unsubscribe from events for a specified topic.
      *

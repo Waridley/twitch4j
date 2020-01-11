@@ -1,32 +1,30 @@
 package com.github.twitch4j.helix.webhooks.topics;
 
-import com.github.twitch4j.helix.domain.FollowList;
 import com.github.twitch4j.helix.webhooks.domain.WebhookNotification;
-import com.github.twitch4j.helix.webhooks.domain.WebhookRequest;
-import javafx.collections.transformation.SortedList;
-import javafx.util.Pair;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.*;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 @EqualsAndHashCode
 public abstract class TwitchWebhookTopic<T> {
-	
+
     // Helix base URL
 	private static final String BASE_URL = "https://api.twitch.tv/helix";
-    
+
     // The topic URL, returned by toString()
 	private final String url;
-    
+
     /**
      * @return The data class that notifications for this topic deserialize to
      */
 	@Getter
 	private Class<T> type;
-    
+
     /**
      * Create a new topic starting with "https://api.twitch.tv/helix"
      *
@@ -35,10 +33,10 @@ public abstract class TwitchWebhookTopic<T> {
      * @param queryParameters A list of the query parameters for this topic URL.
      *                        Will be sorted alphabetically, so performance will be higher if it is already sorted.
      */
-	public TwitchWebhookTopic(String path, Class<T> type, List<Pair<String, Object>> queryParameters) {
+	public TwitchWebhookTopic(String path, Class<T> type, SortedMap<String, Object> queryParameters) {
 	    this(BASE_URL, path, type, queryParameters);
     }
-    
+
     /**
      * Override the base URL in case Twitch ever changes it or creates a new endpoint with a different URL.
      *
@@ -48,20 +46,20 @@ public abstract class TwitchWebhookTopic<T> {
      * @param queryParameters A list of the query parameters for this topic URL.
      *                        Will be sorted alphabetically, so performance will be higher if it is already sorted.
      */
-	public TwitchWebhookTopic(String baseUrl, String path, Class<T> type, List<Pair<String, Object>> queryParameters) {
+	public TwitchWebhookTopic(String baseUrl, String path, Class<T> type, SortedMap<String, Object> queryParameters) {
 		this.type = type;
-		
+
 		// Parameters must be in alphabetical order
-		Collections.sort(queryParameters, new Comparator<Pair<String, Object>>() {
-            @Override
-            public int compare(Pair<String, Object> p1, Pair<String, Object> p2) {
-                return p1.getKey().compareTo(p2.getKey());
-            }
-        });
-		
-        this.url = baseUrl + path + buildQuery(queryParameters);
+//		Collections.sort(queryParameters, new Comparator<Map.Entry<String, Object>>() {
+//            @Override
+//            public int compare(Map.Entry<String, Object> p1, Map.Entry<String, Object> p2) {
+//                return p1.getKey().compareTo(p2.getKey());
+//            }
+//        });
+
+        this.url = baseUrl + path + buildQuery(queryParameters.entrySet());
 	}
-    
+
     /**
      * Create a new topic from an existing URL
      *
@@ -72,14 +70,14 @@ public abstract class TwitchWebhookTopic<T> {
 	    this.url = url;
 	    this.type = type;
     }
-	
+
 	// Generate the query string from the sorted list of parameters
-    private String buildQuery(Iterable<Pair<String, Object>> params) {
+    private String buildQuery(Iterable<Map.Entry<String, Object>> params) {
         StringBuilder urlBuilder = new StringBuilder();
-        
+
         if(params != null) {
             boolean first = true;
-            for(Pair<String, Object> param : params) {
+            for(Map.Entry<String, Object> param : params) {
                 if(param.getValue() != null) {
                     urlBuilder
                         .append(first ? "?" : "&")
@@ -90,10 +88,10 @@ public abstract class TwitchWebhookTopic<T> {
                 }
             }
         }
-        
+
         return urlBuilder.toString();
     }
-    
+
     /**
      * @return The URL associated with this topic
      */
@@ -101,59 +99,59 @@ public abstract class TwitchWebhookTopic<T> {
     public String toString() {
         return url;
     }
-    
+
     public static TwitchWebhookTopic fromUrl(String url) throws URISyntaxException {
         if(url.startsWith(BASE_URL)) {
             URI uri = new URI(url);
             String[] splitQuery = uri.getRawQuery().split("&");
-            List<Pair<String, String>> params = new ArrayList<>(splitQuery.length);
+            Map<String, String> params = new TreeMap<>();
             for(String s : splitQuery) {
                 String[] splitParam = s.split("=");
-                params.add(new Pair<String, String>(splitParam[0], splitParam[1]));
+                params.put(splitParam[0], splitParam[1]);
             }
             switch(uri.getPath().replaceFirst("/helix", "")) {
                 case(ChannelBanTopic.PATH): {
-                    String broadcasterId = params.stream().filter(p -> "broadcaster_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
-                    String userId = params.stream().filter(p -> "user_id".equalsIgnoreCase(p.getKey())).findAny().orElse(null).getValue();
+                    String broadcasterId = params.get("broadcaster_id");
+                    String userId = params.get("user_id");
                     return new ChannelBanTopic(broadcasterId, userId);
                 }
                 case(ChannelSubscriptionTopic.PATH): {
-                    String broadcasterId = params.stream().filter(p -> "broadcaster_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
-                    String userId = params.stream().filter(p -> "user_id".equalsIgnoreCase(p.getKey())).findAny().orElse(null).getValue();
+                    String broadcasterId = params.get("broadcaster_id");
+                    String userId = params.get("user_id");
                     return new ChannelSubscriptionTopic(broadcasterId, userId);
                 }
                 case(ExtensionTransactionsTopic.PATH): {
-                    String extensionId = params.stream().filter(p -> "extension_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
+                    String extensionId = params.get("extension_id");
                     return new ExtensionTransactionsTopic(extensionId);
                 }
                 case(FollowsTopic.PATH): {
-                    String fromId = params.stream().filter(p -> "from_id".equalsIgnoreCase(p.getKey())).findAny().orElse(null).getValue();
-                    String toId = params.stream().filter(p -> "to_id".equalsIgnoreCase(p.getKey())).findAny().orElse(null).getValue();
+                    String fromId = params.get("from_id");
+                    String toId = params.get("to_id");
                     return new FollowsTopic(fromId, toId);
                 }
                 case(ModeratorChangeTopic.PATH): {
-                    String broadcasterId = params.stream().filter(p -> "broadcaster_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
-                    String userId = params.stream().filter(p -> "user_id".equalsIgnoreCase(p.getKey())).findAny().orElse(null).getValue();
+                    String broadcasterId = params.get("broadcaster_id");
+                    String userId = params.get("user_id");
                     return new ModeratorChangeTopic(broadcasterId, userId);
                 }
                 case(StreamsTopic.PATH): {
-                    String userId = params.stream().filter(p -> "user_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
+                    String userId = params.get("user_id");
                     return new StreamsTopic(userId);
                 }
                 case(UsersTopic.PATH): {
-                    String userId = params.stream().filter(p -> "user_id".equalsIgnoreCase(p.getKey())).findAny().get().getValue();
-                    return new StreamsTopic(userId);
+                    String userId = params.get("user_id");
+                    return new UsersTopic(userId);
                 }
             }
         }
         return new UnknownTopic(url);
     }
-    
+
     public static class UnknownTopic extends TwitchWebhookTopic<WebhookNotification> {
-    
+
         public UnknownTopic(String url) {
             super(url, WebhookNotification.class);
         }
     }
-    
+
 }

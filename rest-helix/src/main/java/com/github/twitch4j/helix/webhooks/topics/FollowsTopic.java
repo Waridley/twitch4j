@@ -1,30 +1,37 @@
 package com.github.twitch4j.helix.webhooks.topics;
 
 import com.github.twitch4j.helix.domain.FollowList;
-import javafx.util.Pair;
 import lombok.Getter;
 
-import java.util.Arrays;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * Notifies when a follows event occurs.
  */
 @Getter
 public class FollowsTopic extends TwitchWebhookTopic<FollowList> {
-    
+
     public static final String PATH = "/users/follows";
-    
+
+    private static TreeMap<String, Object> mapParameters(String fromId, String toId) {
+        TreeMap<String, Object> parameterMap = new TreeMap<>();
+        parameterMap.put("first", 1);
+        parameterMap.put("from_id", fromId);
+        parameterMap.put("to_id", toId);
+        return parameterMap;
+    }
+
     /**
      * @return The user who starts following someone.
      */
 	private Optional<String> fromId;
-    
+
     /**
      * @return The user who has a new follower.
      */
 	private Optional<String> toId;
-    
+
     /**
      * Notifies when a follows event occurs.
      * At least one of fromId and toId is required.
@@ -36,15 +43,11 @@ public class FollowsTopic extends TwitchWebhookTopic<FollowList> {
 		super(
 		    PATH,
             FollowList.class,
-            Arrays.asList(
-                new Pair<String, Object>("first", 1),
-                new Pair<String, Object>("from_id", fromId),
-                new Pair<String, Object>("to_id", toId)
-            )
+            mapParameters(fromId, toId)
         );
 		if(fromId == null && toId == null) throw new NullPointerException("At least one of fromId and toId is required.");
 		this.fromId = Optional.ofNullable(fromId);
 		this.toId = Optional.ofNullable(toId);
 	}
-	
+
 }
