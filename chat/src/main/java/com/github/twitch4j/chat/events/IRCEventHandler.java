@@ -198,9 +198,28 @@ public class IRCEventHandler {
 	public void onClearChat(IRCMessageEvent event) {
 		if (event.getCommandType().equals("CLEARCHAT")) {
             EventChannel channel = event.getChannel();
-			if (event.getTags().containsKey("target-user-id")) { // ban or timeout
-				if (event.getTags().containsKey("ban-duration")) { // timeout
-					// Load Info
+            EventUser raider = event.getUser();
+            Integer viewers;
+            try {
+                viewers = Integer.parseInt(event.getTags().get("msg-param-viewerCount"));
+            }
+            catch(NumberFormatException ex) {
+                viewers = 0;
+            }
+            eventManager.dispatchEvent(new RaidEvent(channel, raider, viewers));
+        }
+    }
+    
+    /**
+     * ChatChannel clearing chat, timeouting or banning user Event
+     * @param event IRCMessageEvent
+     */
+    public void onClearChat(IRCMessageEvent event) {
+        if (event.getCommandType().equals("CLEARCHAT")) {
+            EventChannel channel = event.getChannel();
+            if (event.getTags().containsKey("target-user-id")) { // ban or timeout
+                if (event.getTags().containsKey("ban-duration")) { // timeout
+                    // Load Info
                     EventUser user = event.getTargetUser();
 					Integer duration = Integer.parseInt(event.getTagValue("ban-duration").get());
 					String banReason = event.getTags().get("ban-reason") != null ? event.getTags().get("ban-reason").toString() : "";
@@ -290,11 +309,11 @@ public class IRCEventHandler {
 	public void onHostOnEvent(IRCMessageEvent event) {
 		if (event.getCommandType().equals("NOTICE")) {
             EventChannel channel = event.getChannel();
-			String messageId = event.getTagValue("msg-id").get();
-
-			if(messageId.equals("host_on")) {
-				String message = event.getMessage().get();
-				String targetChannelName = message.substring(12, message.length() - 1);
+            String messageId = event.getTagValue("msg-id").get();
+            
+            if(messageId.equals("host_on")) {
+                String message = event.getMessage().get();
+                String targetChannelName = message.substring(12, message.length() - 1);
                 EventChannel targetChannel = new EventChannel(null, targetChannelName);
                 eventManager.publish(new HostOnEvent(channel, targetChannel));
 			}
