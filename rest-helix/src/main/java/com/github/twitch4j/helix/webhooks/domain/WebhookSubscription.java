@@ -18,20 +18,20 @@ import lombok.Setter;
 @JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class WebhookSubscription {
-    
+
     /**
      *  The callback provided for this subscription.
      */
     private String callback;
-    
+
     /**
-     * 	Date and time when this subscription expires. Encoded as RFC3339. The timezone is always UTC ("Z").
+     *  Date and time when this subscription expires. Encoded as RFC3339. The timezone is always UTC ("Z").
      */
     private String expires_at;
-    
+
     /**
      *  The topic URL used in the initial subscription.
      */
     private String topic;
-    
+
 }

@@ -15,8 +15,8 @@ import java.util.Map;
 @JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class WebhookNotification {
-	
-	@JsonProperty("data")
-	private Map<String, Object> data;
-	
+
+    @JsonProperty("data")
+    private Map<String, Object> data;
+
 }

@@ -26,7 +26,7 @@ public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
     /**
      * @return The ID of the channel for which to monitor ban events.
      */
-	private String broadcasterId;
+    private String broadcasterId;
 
     /**
      * @return The user ID of the moderator added or removed.
@@ -39,15 +39,15 @@ public class ChannelBanTopic extends TwitchWebhookTopic<ModeratorEventList> {
      * @param broadcasterId Required. The ID of the channel for which to monitor ban events.
      * @param userId Optional. Specifies the user ID of the moderator added or removed.
      */
-	public ChannelBanTopic(@NonNull String broadcasterId, String userId) {
-		super(
+    public ChannelBanTopic(@NonNull String broadcasterId, String userId) {
+        super(
             PATH,
             ModeratorEventList.class,
             mapParameters(broadcasterId, userId)
         );
-		this.broadcasterId = broadcasterId;
-		this.userId = Optional.ofNullable(userId);
-	}
+        this.broadcasterId = broadcasterId;
+        this.userId = Optional.ofNullable(userId);
+    }
 
 
 }

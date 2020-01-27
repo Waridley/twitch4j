@@ -30,12 +30,12 @@ public class ChannelSubscriptionTopic extends TwitchWebhookTopic<SubscriptionLis
     /**
      * @return The user ID of the broadcaster.
      */
-	private String broadcasterId;
+    private String broadcasterId;
 
      /**
      * @return The ID of the subscribed user.
      */
-	private Optional<String> userId;
+    private Optional<String> userId;
 
     /**
      * This webhook notifies you when:
@@ -47,15 +47,15 @@ public class ChannelSubscriptionTopic extends TwitchWebhookTopic<SubscriptionLis
      * @param broadcasterId Required. User ID of the broadcaster. Must match the User ID in the Bearer token.
      * @param userId Optional. ID of the subscribed user. Currently only one user_id at a time can be queried.
      */
-	public ChannelSubscriptionTopic(@NonNull String broadcasterId, String userId) {
-		super(
-		    PATH,
+    public ChannelSubscriptionTopic(@NonNull String broadcasterId, String userId) {
+        super(
+            PATH,
             SubscriptionList.class,
             mapParameters(broadcasterId, userId)
         );
-		this.broadcasterId = broadcasterId;
-		this.userId = Optional.ofNullable(userId);
+        this.broadcasterId = broadcasterId;
+        this.userId = Optional.ofNullable(userId);
 
-	}
+    }
 
 }

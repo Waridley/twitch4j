@@ -24,20 +24,20 @@ public class ExtensionTransactionsTopic extends TwitchWebhookTopic<ExtensionTran
     /**
      * @return The ID of the extension to listen to for transactions.
      */
-	private final String extensionId;
+    private final String extensionId;
 
     /**
      * Sends a notification when a new transaction is created for an extension.
      *
      * @param extensionId Required. The ID of the extension to listen to for transactions.
      */
-	public ExtensionTransactionsTopic(@NonNull String extensionId) {
-		super(
-		    PATH,
+    public ExtensionTransactionsTopic(@NonNull String extensionId) {
+        super(
+            PATH,
             ExtensionTransactionList.class,
             mapParameters(extensionId)
         );
-		this.extensionId = extensionId;
-	}
+        this.extensionId = extensionId;
+    }
 
 }

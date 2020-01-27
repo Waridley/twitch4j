@@ -23,20 +23,20 @@ public class StreamsTopic extends TwitchWebhookTopic<StreamList> {
     /**
      * @return The user whose stream is monitored.
      */
-	private String channelId;
+    private String channelId;
 
     /**
      * Notifies when a stream changes; e.g., stream goes online or offline, the stream title changes, or the game changes.
      *
      * @param userId Specifies the user whose stream is monitored.
      */
-	public StreamsTopic(@NonNull String userId) {
-		super(
-		    PATH,
+    public StreamsTopic(@NonNull String userId) {
+        super(
+            PATH,
             StreamList.class,
             mapParameters(userId)
         );
-		this.channelId = userId;
-	}
+        this.channelId = userId;
+    }
 
 }

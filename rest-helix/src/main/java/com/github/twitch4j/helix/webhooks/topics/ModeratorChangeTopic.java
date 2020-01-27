@@ -26,12 +26,12 @@ public class ModeratorChangeTopic extends TwitchWebhookTopic<ModeratorEventList>
     /**
      * @return The user ID of the broadcaster.
      */
-	private String broadcasterId;
+    private String broadcasterId;
 
     /**
      * @return The user ID of the moderator added or removed.
      */
-	private Optional<String> userId;
+    private Optional<String> userId;
 
     /**
      * Notifies when a broadcaster adds or removes moderators.
@@ -39,14 +39,14 @@ public class ModeratorChangeTopic extends TwitchWebhookTopic<ModeratorEventList>
      * @param broadcasterId Required. Specifies the user ID of the broadcaster.
      * @param userId Optional. Specifies the user ID of the moderator added or removed.
      */
-	public ModeratorChangeTopic(@NonNull String broadcasterId, String userId) {
-		super(
-		    PATH,
+    public ModeratorChangeTopic(@NonNull String broadcasterId, String userId) {
+        super(
+            PATH,
             ModeratorEventList.class,
             mapParameters(broadcasterId, userId)
         );
-		this.broadcasterId = broadcasterId;
-		this.userId = Optional.ofNullable(userId);
-	}
+        this.broadcasterId = broadcasterId;
+        this.userId = Optional.ofNullable(userId);
+    }
 
 }

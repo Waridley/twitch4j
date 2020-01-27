@@ -20,7 +20,7 @@ public abstract class TwitchWebhookTopic<T> {
 	private final String url;
 
     /**
-     * @return The data class that notifications for this topic deserialize to
+     * The data class that notifications for this topic deserialize to
      */
 	@Getter
 	private Class<T> type;
@@ -48,15 +48,6 @@ public abstract class TwitchWebhookTopic<T> {
      */
 	public TwitchWebhookTopic(String baseUrl, String path, Class<T> type, SortedMap<String, Object> queryParameters) {
 		this.type = type;
-
-		// Parameters must be in alphabetical order
-//		Collections.sort(queryParameters, new Comparator<Map.Entry<String, Object>>() {
-//            @Override
-//            public int compare(Map.Entry<String, Object> p1, Map.Entry<String, Object> p2) {
-//                return p1.getKey().compareTo(p2.getKey());
-//            }
-//        });
-
         this.url = baseUrl + path + buildQuery(queryParameters.entrySet());
 	}
 
@@ -100,7 +91,7 @@ public abstract class TwitchWebhookTopic<T> {
         return url;
     }
 
-    public static TwitchWebhookTopic fromUrl(String url) throws URISyntaxException {
+    public static TwitchWebhookTopic<?> fromUrl(String url) throws URISyntaxException {
         if(url.startsWith(BASE_URL)) {
             URI uri = new URI(url);
             String[] splitQuery = uri.getRawQuery().split("&");

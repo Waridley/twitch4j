@@ -24,7 +24,7 @@ public class UsersTopic extends TwitchWebhookTopic<UserList> {
     /**
      * @return The user whose data is monitored.
      */
-	private String userId;
+    private String userId;
 
     /**
      * Notifies when a user changes information about his/her profile.
@@ -32,13 +32,13 @@ public class UsersTopic extends TwitchWebhookTopic<UserList> {
      *
      * @param userId Required. Specifies the user whose data is monitored.
      */
-	public UsersTopic(@NonNull String userId) {
-		super(
-		    PATH,
+    public UsersTopic(@NonNull String userId) {
+        super(
+            PATH,
             UserList.class,
             mapParameters(userId)
         );
-		this.userId = userId;
-	}
+        this.userId = userId;
+    }
 
 }
