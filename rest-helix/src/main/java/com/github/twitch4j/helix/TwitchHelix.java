@@ -105,7 +105,7 @@ public interface TwitchHelix {
         @Param("after") String after,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Creates a clip programmatically. This returns both an ID and an edit URL for the new clip.
      *
@@ -691,7 +691,7 @@ public interface TwitchHelix {
         @Param("before") String before,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Get Webhook Subscriptions
      * <p>
@@ -711,7 +711,7 @@ public interface TwitchHelix {
         @Param("after") String after,
         @Param("first") Integer limit
     );
-    
+
     /**
      * Subscribe to or unsubscribe from events for a specified topic.
      *
