@@ -57,7 +57,7 @@ subprojects {
 			// Event Dispatcher
  			dependency group: 'com.github.philippheuer.events4j', name: 'events4j-core', version: '0.7.1'
 			dependency group: 'com.github.philippheuer.events4j', name: 'events4j-handler-simple', version: '0.7.1'
-			
+
 			// Credential Manager
 			dependency group: 'com.github.philippheuer.credentialmanager', name: 'credentialmanager', version: '0.1.0'
 
