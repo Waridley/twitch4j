@@ -140,9 +140,9 @@ public class TwitchPubSub implements AutoCloseable {
                     }
 
                     // sleep one second
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (Exception ex) {
-                    log.error("PubSub: Unexpected error in worker thread: " + ex.getMessage());
+                    log.error("PubSub: Unexpected error in worker thread", ex);
                 }
             }
         });
@@ -367,6 +367,7 @@ public class TwitchPubSub implements AutoCloseable {
      * Send WS Message to subscribe to a topic
      *
      * @param request Topic
+     * @return PubSubSubscription
      */
     public PubSubSubscription listenOnTopic(PubSubRequest request) {
         queueRequest(request);
@@ -474,6 +475,7 @@ public class TwitchPubSub implements AutoCloseable {
      *
      * @param credential Credential (any)
      * @param channelId Target Channel Id
+     * @return PubSubSubscription
      */
     public PubSubSubscription listenForChannelPointsRedemptionEvents(OAuth2Credential credential, String channelId) {
         PubSubRequest request = new PubSubRequest();
