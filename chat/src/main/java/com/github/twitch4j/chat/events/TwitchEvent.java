@@ -1,5 +1,6 @@
 package com.github.twitch4j.chat.events;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.github.philippheuer.events4j.core.domain.Event;
 import com.github.twitch4j.chat.TwitchChat;
 import lombok.Data;
@@ -21,6 +22,7 @@ public abstract class TwitchEvent extends Event {
      *
      * @return TwitchChat Instance
 	 */
+	@JsonIgnore
 	public TwitchChat getTwitchChat() {
 	    return getServiceMediator().getService(TwitchChat.class, "twitch4j-chat");
     }
