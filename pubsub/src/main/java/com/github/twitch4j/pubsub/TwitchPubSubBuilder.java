@@ -1,10 +1,7 @@
 package com.github.twitch4j.pubsub;
 
 import com.github.philippheuer.events4j.core.EventManager;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.Wither;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,7 +17,7 @@ public class TwitchPubSubBuilder {
     /**
      * Event Manager
      */
-    @Wither
+    @With
     private EventManager eventManager = new EventManager();
 
     /**
@@ -32,14 +29,14 @@ public class TwitchPubSubBuilder {
     }
 
     /**
-     * Twitch API Client (Helix)
-     * @return TwitchHelix
+     * Twitch PubSub API Client
+     * @return TwitchPubSub
      */
     public TwitchPubSub build() {
         log.debug("PubSub: Initializing Module ...");
-        TwitchPubSub twitchChat = new TwitchPubSub(this.eventManager);
+        TwitchPubSub twitchPubSub = new TwitchPubSub(this.eventManager);
 
-        return twitchChat;
+        return twitchPubSub;
     }
 
 }

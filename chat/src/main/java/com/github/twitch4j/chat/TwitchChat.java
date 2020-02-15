@@ -503,8 +503,9 @@ public class TwitchChat implements AutoCloseable {
         // try to find a `command` based on the prefix
         for (String commandPrefix : this.commandPrefixes) {
             if (event.getMessage().startsWith(commandPrefix)) {
-                prefix = Optional.ofNullable(commandPrefix);
-                commandWithoutPrefix = Optional.ofNullable(event.getMessage().substring(commandPrefix.length()));
+                prefix = Optional.of(commandPrefix);
+                commandWithoutPrefix = Optional.of(event.getMessage().substring(commandPrefix.length()));
+                break;
             }
         }
 
