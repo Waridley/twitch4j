@@ -2,6 +2,7 @@ package com.github.twitch4j.helix;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.twitch4j.common.builder.TwitchAPIBuilder;
+import com.github.twitch4j.common.feign.Twitch4jFeignSlf4jLogger;
 import com.github.twitch4j.common.feign.interceptor.TwitchClientIdInterceptor;
 import com.netflix.config.ConfigurationManager;
 import feign.Logger;
@@ -11,6 +12,7 @@ import feign.hystrix.HystrixFeign;
 import feign.jackson.JacksonDecoder;
 import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
+import feign.slf4j.Slf4jLogger;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -71,7 +73,8 @@ public class TwitchHelixBuilder extends TwitchAPIBuilder<TwitchHelixBuilder> {
             .client(new OkHttpClient())
             .encoder(new JacksonEncoder(mapper))
             .decoder(new JacksonDecoder(mapper))
-            .logger(new Logger.ErrorLogger())
+            .logger(new Twitch4jFeignSlf4jLogger(TwitchHelix.class))
+            .logLevel(Logger.Level.FULL)
             .errorDecoder(new TwitchHelixErrorDecoder(new JacksonDecoder()))
             .requestInterceptor(new TwitchClientIdInterceptor(this))
             .options(new Request.Options(timeout / 3, timeout))
