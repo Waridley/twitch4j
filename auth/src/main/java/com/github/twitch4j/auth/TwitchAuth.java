@@ -5,9 +5,11 @@ import com.github.philippheuer.credentialmanager.domain.IdentityProvider;
 import com.github.philippheuer.credentialmanager.identityprovider.OAuth2IdentityProvider;
 import com.github.twitch4j.auth.providers.TwitchIdentityProvider;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
 
+@Slf4j
 public class TwitchAuth {
 
     /**
@@ -26,16 +28,18 @@ public class TwitchAuth {
      */
     public TwitchAuth(CredentialManager credentialManager, String clientId, String clientSecret, String redirectUrl) {
         this.credentialManager = credentialManager;
-
-        // register the twitch identityProvider
-        Optional<OAuth2IdentityProvider> ip = this.credentialManager.getOAuth2IdentityProviderByName("twitch");
-        if (ip.isPresent()) {
-            // already registered
-        } else {
-            // register
-            IdentityProvider identityProvider = new TwitchIdentityProvider(clientId, clientSecret, redirectUrl);
-            this.credentialManager.registerIdentityProvider(identityProvider);
-        }
+        registerIdentityProvider(credentialManager, clientId, clientSecret, redirectUrl);
     }
 
+    public static void registerIdentityProvider(CredentialManager credentialManager, String clientId, String clientSecret, String redirectUrl) {
+        // register the twitch identityProvider
+        Optional<OAuth2IdentityProvider> ip = credentialManager.getOAuth2IdentityProviderByName("twitch");
+        if (!ip.isPresent()) {
+            // register
+            IdentityProvider identityProvider = new TwitchIdentityProvider(clientId, clientSecret, redirectUrl);
+            credentialManager.registerIdentityProvider(identityProvider);
+        } else {
+            log.warn("TwitchIdentityProvider was already registered, ignoring call to TwitchAuth.registerIdentityProvider!");
+        }
+    }
 }

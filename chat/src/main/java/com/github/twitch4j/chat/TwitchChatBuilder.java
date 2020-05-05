@@ -5,18 +5,16 @@ import com.github.philippheuer.credentialmanager.CredentialManagerBuilder;
 import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
 import com.github.philippheuer.events4j.core.EventManager;
 import com.github.twitch4j.common.builder.TwitchEventAwareAPIBuilder;
+import com.github.twitch4j.common.util.ThreadUtils;
 import io.github.bucket4j.Bandwidth;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.experimental.Wither;
+import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 /**
  * Twitch Chat
@@ -32,31 +30,20 @@ public class TwitchChatBuilder extends TwitchEventAwareAPIBuilder<TwitchChatBuil
     /**
      * Event Manager
      */
-    @Wither
-    private EventManager eventManager = new EventManager();
+    @With
+    private EventManager eventManager;
 
     /**
      * Credential Manager
      */
-    @Wither
+    @With
     private CredentialManager credentialManager = CredentialManagerBuilder.builder().build();
 
     /**
      * IRC User Id
      */
-    @Wither
+    @With
     private OAuth2Credential chatAccount;
-
-    /**
-     * Enable Channel Cache to keep track of mods/timeouts/bans/
-     */
-    @Wither
-    private Boolean enableChannelCache = false;
-
-    /**
-     * BaseUrl
-     */
-    private String baseUrl = "https://api.twitch.tv/helix";
 
     /**
      * IRC Command Handlers
@@ -66,14 +53,26 @@ public class TwitchChatBuilder extends TwitchEventAwareAPIBuilder<TwitchChatBuil
     /**
      * Size of the ChatQueue
      */
-    @Wither
+    @With
     protected Integer chatQueueSize = 200;
 
     /**
      * Custom RateLimit for ChatMessages
      */
-    @Wither
+    @With
     protected Bandwidth chatRateLimit = Bandwidth.simple(20, Duration.ofSeconds(30));
+
+    /**
+     * Scheduler Thread Pool Executor
+     */
+    @With
+    private ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;
+
+    /**
+     * Millisecond wait time for taking items off chat queue. Default recommended
+     */
+    @With
+    private long chatQueueTimeout = 1000L;
 
     /**
      * Initialize the builder
@@ -90,10 +89,16 @@ public class TwitchChatBuilder extends TwitchEventAwareAPIBuilder<TwitchChatBuil
     public TwitchChat build() {
         log.debug("TwitchChat: Initializing ErrorTracking ...");
 
-        log.debug("TwitchChat: Initializing Module ...");
-        TwitchChat twitchChat = new TwitchChat(this.eventManager, this.credentialManager, this.chatAccount, this.enableChannelCache, this.commandPrefixes, this.chatQueueSize, this.chatRateLimit);
+        if(scheduledThreadPoolExecutor == null)
+            scheduledThreadPoolExecutor = ThreadUtils.getDefaultScheduledThreadPoolExecutor();
 
-        return twitchChat;
+        if(eventManager == null) {
+            eventManager = new EventManager();
+            eventManager.autoDiscovery();
+        }
+
+        log.debug("TwitchChat: Initializing Module ...");
+        return new TwitchChat(this.eventManager, this.credentialManager, this.chatAccount, this.commandPrefixes, this.chatQueueSize, this.chatRateLimit, this.scheduledThreadPoolExecutor, this.chatQueueTimeout);
     }
 
     /**

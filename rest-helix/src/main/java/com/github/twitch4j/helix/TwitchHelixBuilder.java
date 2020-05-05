@@ -20,6 +20,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Wither;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Twitch API - Helix
  */
@@ -37,7 +39,7 @@ public class TwitchHelixBuilder extends TwitchAPIBuilder<TwitchHelixBuilder> {
     /**
      * Default Timeout
      */
-    @Wither
+    @With
     private Integer timeout = 5000;
 
     /**
@@ -76,8 +78,8 @@ public class TwitchHelixBuilder extends TwitchAPIBuilder<TwitchHelixBuilder> {
             .logger(new Twitch4jFeignSlf4jLogger(TwitchHelix.class))
             .logLevel(Logger.Level.FULL)
             .errorDecoder(new TwitchHelixErrorDecoder(new JacksonDecoder()))
-            .requestInterceptor(new TwitchClientIdInterceptor(this))
-            .options(new Request.Options(timeout / 3, timeout))
+            .requestInterceptor(new TwitchHelixClientIdInterceptor(this))
+            .options(new Request.Options(timeout / 3, TimeUnit.MILLISECONDS, timeout, TimeUnit.MILLISECONDS, true))
             .retryer(new Retryer.Default(500, timeout, 2))
             .target(TwitchHelix.class, baseUrl);
 

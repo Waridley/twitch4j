@@ -22,10 +22,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.queue.CircularFifoQueue;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class TwitchChat implements AutoCloseable {
@@ -46,7 +49,7 @@ public class TwitchChat implements AutoCloseable {
      * OAuth2Credential, used to sign in to twitch chat
      */
     @Getter(AccessLevel.NONE)
-    private Optional<OAuth2Credential> chatCredential = Optional.empty();
+    private Optional<OAuth2Credential> chatCredential;
 
     /**
      * The WebSocket Server
@@ -63,17 +66,12 @@ public class TwitchChat implements AutoCloseable {
      * The connection state
      * Default: ({@link TMIConnectionState#DISCONNECTED})
      */
-    private TMIConnectionState connectionState = TMIConnectionState.DISCONNECTED;
-
-    /**
-     * Enable Channel Cache
-     */
-    private Boolean enableChannelCache = false;
+    private volatile TMIConnectionState connectionState = TMIConnectionState.DISCONNECTED;
 
     /**
      * Channel Cache
      */
-    protected final Map<String, Boolean> channelCache = new HashMap<>();
+    protected final Map<String, Boolean> channelCache = new ConcurrentHashMap<>();
 
     /**
      * IRC Message Bucket
@@ -83,7 +81,7 @@ public class TwitchChat implements AutoCloseable {
     /**
      * IRC Command Queue
      */
-    protected final CircularFifoQueue<String> ircCommandQueue;
+    protected final ArrayBlockingQueue<String> ircCommandQueue;
 
     /**
      * Custom RateLimit for ChatMessages
@@ -96,9 +94,9 @@ public class TwitchChat implements AutoCloseable {
     protected final Thread queueThread;
 
     /**
-     * IRC Command Queue Thread
+     * Command Queue Thread stop flag
      */
-    protected Boolean stopQueueThread = false;
+    protected volatile Boolean stopQueueThread = false;
 
     /**
      * IRC Command Handlers
@@ -106,24 +104,37 @@ public class TwitchChat implements AutoCloseable {
     protected final List<String> commandPrefixes;
 
     /**
+     * Thread Pool Executor
+     */
+    protected final ScheduledThreadPoolExecutor taskExecutor;
+
+    /**
+     * Time to wait for an item on the chat queue before continuing to next iteration
+     * If set too high your thread will be late check to shutdown
+     */
+    protected final long chatQueueTimeout;
+
+    /**
      * Constructor
      *
      * @param eventManager EventManager
      * @param credentialManager CredentialManager
      * @param chatCredential Chat Credential
-     * @param enableChannelCache Enable channel cache?
      * @param commandPrefixes Command Prefixes
      * @param chatQueueSize Chat Queue Size
      * @param chatRateLimit Bandwidth / Bucket
+     * @param taskExecutor ScheduledThreadPoolExecutor
+     * @param chatQueueTimeout Timeout to wait for events in Chat Queue
      */
-    public TwitchChat(EventManager eventManager, CredentialManager credentialManager, OAuth2Credential chatCredential, Boolean enableChannelCache, List<String> commandPrefixes, Integer chatQueueSize, Bandwidth chatRateLimit) {
+    public TwitchChat(EventManager eventManager, CredentialManager credentialManager, OAuth2Credential chatCredential, List<String> commandPrefixes, Integer chatQueueSize, Bandwidth chatRateLimit, ScheduledThreadPoolExecutor taskExecutor, long chatQueueTimeout) {
         this.eventManager = eventManager;
         this.credentialManager = credentialManager;
         this.chatCredential = Optional.ofNullable(chatCredential);
-        this.enableChannelCache = enableChannelCache;
         this.commandPrefixes = commandPrefixes;
-        this.ircCommandQueue = new CircularFifoQueue<>(chatQueueSize);
+        this.ircCommandQueue = new ArrayBlockingQueue<>(chatQueueSize, true);
         this.chatRateLimit = chatRateLimit;
+        this.taskExecutor = taskExecutor;
+        this.chatQueueTimeout = chatQueueTimeout;
 
         // credential validation
         if (this.chatCredential.isPresent() == false) {
@@ -156,39 +167,54 @@ public class TwitchChat implements AutoCloseable {
 
         // queue command worker
         this.queueThread = new Thread(() -> {
-            while (stopQueueThread == false) {
+            while (!stopQueueThread) {
+                String command = null;
                 try {
-                    // If connected, consume 1 token
-                    if (ircCommandQueue.size() > 0) {
-                        if (connectionState.equals(TMIConnectionState.CONNECTED)) {
-                            // block thread, until we can continue
-                            ircMessageBucket.asScheduler().consume(1);
+                    // wait for queue, only have a timeout set to allow multiple loops to check stopQueueThread
+                    command = ircCommandQueue.poll(this.chatQueueTimeout, TimeUnit.MILLISECONDS);
+                    if(command != null) {
+                        // Send the message, retrying forever until we are connected.
+                        while (!stopQueueThread) {
+                            if (connectionState.equals(TMIConnectionState.CONNECTED)) {
+                                // block thread, until we can continue
+                                ircMessageBucket.asScheduler().consume(1);
 
-                            // pop one command from the queue and execute it
-                            String command = ircCommandQueue.remove();
-                            sendCommand(command);
+                                sendCommand(command);
+                                break;
+                            }
+                            // Sleep for 25 milliseconds to wait for reconnection
+                            TimeUnit.MILLISECONDS.sleep(25L);
+                        }
+                        // Logging
+                        log.debug("Processed command from queue: [{}].", command.startsWith("PASS") ? "***OAUTH TOKEN HIDDEN***" : command);
+                        log.debug("{} messages left before hitting the rate-limit!", ircMessageBucket.getAvailableTokens());
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to process message from command queue", ex);
 
-                            // Logging
-                            log.debug("Processed command from queue: [{}].", command.startsWith("PASS") ? "***OAUTH TOKEN HIDDEN***" : command);
-                            log.debug("{} messages left before hitting the rate-limit!", ircMessageBucket.getAvailableTokens());
+                    // Reschedule command for processing
+                    if(command != null) {
+                        try {
+                            ircCommandQueue.put(command);
+                        } catch (InterruptedException e) {
+                            log.error("Failed to reschedule command", e);
                         }
                     }
 
-                    // sleep one second
-                    Thread.sleep(250);
-                } catch (Exception ex) {
-                    log.error("Failed to process message from command queue: " + ex.getMessage());
                 }
             }
+
         });
-        queueThread.start();
+
+        // Thread will start right now
+        taskExecutor.schedule(this.queueThread, 1L, TimeUnit.MILLISECONDS);
         log.debug("Started IRC Queue Worker");
 
         // Event Handlers
         log.debug("Registering the following command triggers: " + commandPrefixes.toString());
 
         // register event handler
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(ChannelMessageEvent.class, event -> onChannelMessage(event));
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(ChannelMessageEvent.class, this::onChannelMessage);
     }
 
     /**
@@ -207,16 +233,16 @@ public class TwitchChat implements AutoCloseable {
                 // Connect to IRC WebSocket
                 this.webSocket.connect();
             } catch (Exception ex) {
-                log.error("Connection to Twitch IRC failed: {} - Retrying ...", ex.getMessage());
-                // Sleep 1 second before trying to reconnect
+                log.error("Connection to Twitch IRC failed: Retrying ...", ex);
+                // Sleep half before trying to reconnect
                 try {
-                    Thread.sleep(1000);
-                } catch (Exception et) {
+                    TimeUnit.MILLISECONDS.sleep(500L);
+                } catch (Exception ignored) {
 
+                } finally {
+                    // reconnect
+                    reconnect();
                 }
-
-                // reconnect
-                reconnect();
             }
         }
     }
@@ -456,13 +482,12 @@ public class TwitchChat implements AutoCloseable {
      * @param reason reason
      */
     public void timeout(String channel, String user, Duration duration, String reason) {
-        StringBuilder sb = new StringBuilder()
-            .append(duration.getSeconds());
+        StringBuilder sb = new StringBuilder(user).append(duration.getSeconds());
         if (reason != null) {
             sb.append(" ").append(reason);
         }
 
-        sendMessage(channel, String.format("/timeout %s %s", user, sb.toString()));
+        sendMessage(channel, String.format("/timeout %s", sb.toString()));
     }
 
     /**
@@ -523,7 +548,25 @@ public class TwitchChat implements AutoCloseable {
      */
     public void close() {
         this.stopQueueThread = true;
+        this.taskExecutor.remove(this.queueThread);
         this.disconnect();
     }
 
+    /**
+     * Check if Chat is currently in a channel
+     * @param channelName channel to check (without # prefix)
+     * @return boolean
+     */
+    public boolean isChannelJoined(String channelName) {
+        return channelCache.getOrDefault(channelName, false);
+    }
+
+    /**
+     * Returns a list of all channels currently joined (without # prefix)
+     *
+     * @return List Channel Names
+     */
+    public List<String> getCurrentChannels() {
+        return Collections.unmodifiableList(new ArrayList<>(channelCache.keySet()));
+    }
 }

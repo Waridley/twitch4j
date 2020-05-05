@@ -19,6 +19,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Wither;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Twitch API - Messaging Interface
  */
@@ -36,7 +38,7 @@ public class TwitchMessagingInterfaceBuilder extends TwitchAPIBuilder<TwitchMess
     /**
      * Default Timeout
      */
-    @Wither
+    @With
     private Integer timeout = 5000;
 
     /**
@@ -72,7 +74,7 @@ public class TwitchMessagingInterfaceBuilder extends TwitchAPIBuilder<TwitchMess
             .errorDecoder(new TwitchMessagingInterfaceErrorDecoder(new JacksonDecoder()))
             .requestInterceptor(new TwitchClientIdInterceptor(this))
             .retryer(new Retryer.Default(1, 10000, 3))
-            .options(new Request.Options(5000, 15000))
+            .options(new Request.Options(5000, TimeUnit.MILLISECONDS, 15000, TimeUnit.MILLISECONDS, true))
             .target(TwitchMessagingInterface.class, baseUrl);
 
         return client;
