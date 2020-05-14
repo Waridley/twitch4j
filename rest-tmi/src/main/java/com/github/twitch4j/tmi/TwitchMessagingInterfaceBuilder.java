@@ -1,5 +1,6 @@
 package com.github.twitch4j.tmi;
 
+import com.github.twitch4j.common.config.Twitch4JGlobal;
 import com.github.twitch4j.common.builder.TwitchAPIBuilder;
 import com.github.twitch4j.common.feign.Twitch4jFeignSlf4jLogger;
 import com.github.twitch4j.common.feign.interceptor.TwitchClientIdInterceptor;
@@ -25,7 +26,31 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Getter
-public class TwitchMessagingInterfaceBuilder extends TwitchAPIBuilder<TwitchMessagingInterfaceBuilder> {
+public class TwitchMessagingInterfaceBuilder {
+
+    /**
+     * Client Id
+     */
+    @With
+    private String clientId = Twitch4JGlobal.clientId;
+
+    /**
+     * Client Secret
+     */
+    @With
+    private String clientSecret = Twitch4JGlobal.clientSecret;
+
+    /**
+     * User Agent
+     */
+    @With
+    private String userAgent = Twitch4JGlobal.userAgent;
+
+    /**
+     * HTTP Request Queue Size
+     */
+    @With
+    private Integer requestQueueSize = -1;
 
     /**
      * BaseUrl
@@ -69,6 +94,8 @@ public class TwitchMessagingInterfaceBuilder extends TwitchAPIBuilder<TwitchMess
             .logger(new Twitch4jFeignSlf4jLogger(TwitchMessagingInterface.class))
             .logLevel(Logger.Level.FULL)
             .errorDecoder(new TwitchMessagingInterfaceErrorDecoder(new JacksonDecoder()))
+            .logLevel(Logger.Level.BASIC)
+            .requestInterceptor(new TwitchClientIdInterceptor(this.clientId, this.userAgent))
             .requestInterceptor(new TwitchClientIdInterceptor(this))
             .retryer(new Retryer.Default(1, 10000, 3))
             .options(new Request.Options(5000, TimeUnit.MILLISECONDS, 15000, TimeUnit.MILLISECONDS, true))

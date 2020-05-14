@@ -1,6 +1,7 @@
 package com.github.twitch4j.helix;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.twitch4j.common.config.Twitch4JGlobal;
 import com.github.twitch4j.common.builder.TwitchAPIBuilder;
 import com.github.twitch4j.common.feign.Twitch4jFeignSlf4jLogger;
 import com.github.twitch4j.common.feign.interceptor.TwitchClientIdInterceptor;
@@ -27,7 +28,31 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Getter
-public class TwitchHelixBuilder extends TwitchAPIBuilder<TwitchHelixBuilder> {
+public class TwitchHelixBuilder {
+
+    /**
+     * Client Id
+     */
+    @With
+    private String clientId = Twitch4JGlobal.clientId;
+
+    /**
+     * Client Secret
+     */
+    @With
+    private String clientSecret = Twitch4JGlobal.clientSecret;
+
+    /**
+     * User Agent
+     */
+    @With
+    private String userAgent = Twitch4JGlobal.userAgent;
+
+    /**
+     * HTTP Request Queue Size
+     */
+    @With
+    private Integer requestQueueSize = -1;
 
     /**
      * BaseUrl
