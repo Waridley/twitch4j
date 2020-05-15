@@ -1,7 +1,6 @@
 package com.github.twitch4j.tmi;
 
 import com.github.twitch4j.common.config.Twitch4JGlobal;
-import com.github.twitch4j.common.builder.TwitchAPIBuilder;
 import com.github.twitch4j.common.feign.Twitch4jFeignSlf4jLogger;
 import com.github.twitch4j.common.feign.interceptor.TwitchClientIdInterceptor;
 import com.netflix.config.ConfigurationManager;
@@ -12,9 +11,7 @@ import feign.hystrix.HystrixFeign;
 import feign.jackson.JacksonDecoder;
 import feign.jackson.JacksonEncoder;
 import feign.okhttp.OkHttpClient;
-import feign.slf4j.Slf4jLogger;
 import lombok.*;
-import lombok.experimental.Wither;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
@@ -96,7 +93,6 @@ public class TwitchMessagingInterfaceBuilder {
             .errorDecoder(new TwitchMessagingInterfaceErrorDecoder(new JacksonDecoder()))
             .logLevel(Logger.Level.BASIC)
             .requestInterceptor(new TwitchClientIdInterceptor(this.clientId, this.userAgent))
-            .requestInterceptor(new TwitchClientIdInterceptor(this))
             .retryer(new Retryer.Default(1, 10000, 3))
             .options(new Request.Options(5000, TimeUnit.MILLISECONDS, 15000, TimeUnit.MILLISECONDS, true))
             .target(TwitchMessagingInterface.class, baseUrl);
