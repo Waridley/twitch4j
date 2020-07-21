@@ -1,6 +1,8 @@
 package com.github.twitch4j.helix;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
+import com.github.twitch4j.common.config.ProxyConfig;
 import com.github.twitch4j.common.config.Twitch4JGlobal;
 import com.github.twitch4j.common.feign.Twitch4jFeignSlf4jLogger;
 import com.github.twitch4j.helix.interceptor.TwitchHelixClientIdInterceptor;
@@ -45,6 +47,12 @@ public class TwitchHelixBuilder {
     private String userAgent = Twitch4JGlobal.userAgent;
 
     /**
+     * Default Auth Token for API Requests
+     */
+    @With
+    private OAuth2Credential defaultAuthToken = null;
+
+    /**
      * HTTP Request Queue Size
      */
     @With
@@ -60,6 +68,12 @@ public class TwitchHelixBuilder {
      */
     @With
     private Integer timeout = 5000;
+
+    /**
+     * Proxy Configuration
+     */
+    @With
+    private ProxyConfig proxyConfig = null;
 
     /**
      * Initialize the builder
@@ -89,9 +103,14 @@ public class TwitchHelixBuilder {
         // - Modules
         mapper.findAndRegisterModules();
 
+        // Create HttpClient with proxy
+        okhttp3.OkHttpClient.Builder clientBuilder = new okhttp3.OkHttpClient.Builder();
+        if (proxyConfig != null)
+            proxyConfig.apply(clientBuilder);
+
         // Feign
         TwitchHelix client = HystrixFeign.builder()
-            .client(new OkHttpClient())
+            .client(new OkHttpClient(clientBuilder.build()))
             .encoder(new JacksonEncoder(mapper))
             .decoder(new JacksonDecoder(mapper))
             .logger(new Twitch4jFeignSlf4jLogger(TwitchHelix.class))

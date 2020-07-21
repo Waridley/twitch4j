@@ -4,12 +4,15 @@ import com.github.philippheuer.credentialmanager.CredentialManager;
 import com.github.philippheuer.credentialmanager.domain.OAuth2Credential;
 import com.github.philippheuer.events4j.core.EventManager;
 import com.github.philippheuer.events4j.simple.SimpleEventHandler;
+import com.github.twitch4j.auth.providers.TwitchIdentityProvider;
 import com.github.twitch4j.chat.enums.CommandSource;
 import com.github.twitch4j.chat.enums.TMIConnectionState;
 import com.github.twitch4j.chat.events.CommandEvent;
 import com.github.twitch4j.chat.events.IRCEventHandler;
 import com.github.twitch4j.chat.events.channel.ChannelMessageEvent;
 import com.github.twitch4j.chat.events.channel.IRCMessageEvent;
+import com.github.twitch4j.common.config.ProxyConfig;
+import com.github.twitch4j.common.util.CryptoUtils;
 import com.neovisionaries.ws.client.WebSocket;
 import com.neovisionaries.ws.client.WebSocketAdapter;
 import com.neovisionaries.ws.client.WebSocketFactory;
@@ -17,21 +20,33 @@ import com.neovisionaries.ws.client.WebSocketFrame;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Bucket4j;
-import lombok.AccessLevel;
+import io.github.bucket4j.local.LocalBucketBuilder;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class TwitchChat implements AutoCloseable {
+
+    public static final int REQUIRED_THREAD_COUNT = 1;
 
     /**
      * EventManager
@@ -48,30 +63,45 @@ public class TwitchChat implements AutoCloseable {
     /**
      * OAuth2Credential, used to sign in to twitch chat
      */
-    @Getter(AccessLevel.NONE)
-    private Optional<OAuth2Credential> chatCredential;
+    private OAuth2Credential chatCredential;
 
     /**
-     * The WebSocket Server
+     * Twitch's official WebSocket Server
      */
-    private final String webSocketServer = "wss://irc-ws.chat.twitch.tv:443";
+    public static final String TWITCH_WEB_SOCKET_SERVER = "wss://irc-ws.chat.twitch.tv:443";
+
+    /**
+     * ThirdParty WebSocket Server for Testing
+     */
+    public static final String FDGT_TEST_SOCKET_SERVER = "wss://irc.fdgt.dev";
+
+    /**
+     * The websocket url for the chat client to connect to.
+     */
+    protected final String baseUrl;
+
+    /**
+     * Whether the {@link OAuth2Credential} password should be sent when the baseUrl does not
+     * match the official twitch websocket server, thus bypassing a security check in the library.
+     */
+    protected final boolean sendCredentialToThirdPartyHost;
 
     /**
      * WebSocket Client
      */
-    @Setter(AccessLevel.NONE)
-    private WebSocket webSocket;
+    private volatile WebSocket webSocket;
 
     /**
      * The connection state
      * Default: ({@link TMIConnectionState#DISCONNECTED})
      */
+    @Getter
     private volatile TMIConnectionState connectionState = TMIConnectionState.DISCONNECTED;
 
     /**
      * Channel Cache
      */
-    protected final Map<String, Boolean> channelCache = new ConcurrentHashMap<>();
+    protected final Set<String> channelCache = ConcurrentHashMap.newKeySet();
 
     /**
      * IRC Message Bucket
@@ -79,9 +109,19 @@ public class TwitchChat implements AutoCloseable {
     protected final Bucket ircMessageBucket;
 
     /**
+     * IRC Whisper Bucket
+     */
+    protected final Bucket ircWhisperBucket;
+
+    /**
      * IRC Command Queue
      */
-    protected final ArrayBlockingQueue<String> ircCommandQueue;
+    protected final BlockingQueue<String> ircCommandQueue;
+
+    /**
+     * Whisper-specific Command Queue
+     */
+    protected final BlockingQueue<String> whisperCommandQueue;
 
     /**
      * Custom RateLimit for ChatMessages
@@ -89,9 +129,14 @@ public class TwitchChat implements AutoCloseable {
     protected final Bandwidth chatRateLimit;
 
     /**
+     * Custom RateLimit for Whispers
+     */
+    protected final Bandwidth[] whisperRateLimit;
+
+    /**
      * IRC Command Queue Thread
      */
-    protected final Thread queueThread;
+    protected final ScheduledFuture<?> queueThread;
 
     /**
      * Command Queue Thread stop flag
@@ -106,7 +151,7 @@ public class TwitchChat implements AutoCloseable {
     /**
      * Thread Pool Executor
      */
-    protected final ScheduledThreadPoolExecutor taskExecutor;
+    protected final ScheduledExecutorService taskExecutor;
 
     /**
      * Time to wait for an item on the chat queue before continuing to next iteration
@@ -115,37 +160,57 @@ public class TwitchChat implements AutoCloseable {
     protected final long chatQueueTimeout;
 
     /**
+     * WebSocket Factory
+     */
+    protected final WebSocketFactory webSocketFactory;
+
+    /**
      * Constructor
      *
      * @param eventManager EventManager
      * @param credentialManager CredentialManager
      * @param chatCredential Chat Credential
+     * @param baseUrl The websocket url for the chat client to connect to
+     * @param sendCredentialToThirdPartyHost Whether the password should be sent when the baseUrl is not official
      * @param commandPrefixes Command Prefixes
      * @param chatQueueSize Chat Queue Size
-     * @param chatRateLimit Bandwidth / Bucket
+     * @param chatRateLimit Bandwidth / Bucket for chat
+     * @param whisperRateLimit Bandwidth / Buckets for whispers
      * @param taskExecutor ScheduledThreadPoolExecutor
      * @param chatQueueTimeout Timeout to wait for events in Chat Queue
+     * @param proxyConfig Proxy Configuration
      */
-    public TwitchChat(EventManager eventManager, CredentialManager credentialManager, OAuth2Credential chatCredential, List<String> commandPrefixes, Integer chatQueueSize, Bandwidth chatRateLimit, ScheduledThreadPoolExecutor taskExecutor, long chatQueueTimeout) {
+    public TwitchChat(EventManager eventManager, CredentialManager credentialManager, OAuth2Credential chatCredential, String baseUrl, boolean sendCredentialToThirdPartyHost, List<String> commandPrefixes, Integer chatQueueSize, Bandwidth chatRateLimit, Bandwidth[] whisperRateLimit, ScheduledThreadPoolExecutor taskExecutor, long chatQueueTimeout, ProxyConfig proxyConfig) {
         this.eventManager = eventManager;
         this.credentialManager = credentialManager;
-        this.chatCredential = Optional.ofNullable(chatCredential);
+        this.chatCredential = chatCredential;
+        this.baseUrl = baseUrl;
+        this.sendCredentialToThirdPartyHost = sendCredentialToThirdPartyHost;
         this.commandPrefixes = commandPrefixes;
         this.ircCommandQueue = new ArrayBlockingQueue<>(chatQueueSize, true);
+        this.whisperCommandQueue = new LinkedBlockingQueue<>();
         this.chatRateLimit = chatRateLimit;
+        this.whisperRateLimit = whisperRateLimit;
         this.taskExecutor = taskExecutor;
         this.chatQueueTimeout = chatQueueTimeout;
 
+        // Create WebSocketFactory and apply proxy settings
+        this.webSocketFactory = new WebSocketFactory();
+        if (proxyConfig != null)
+            proxyConfig.applyWs(webSocketFactory.getProxySettings());
+
         // credential validation
-        if (this.chatCredential.isPresent() == false) {
-            log.error("TwitchChat: No ChatAccount provided, Chat will not be available! Please look at the docs Twitch4J -> Chat");
-        } else if(this.chatCredential.get().getUserName() == null) {
+        if (this.chatCredential == null) {
+            log.info("TwitchChat: No ChatAccount provided, Chat will be joined anonymously! Please look at the docs Twitch4J -> Chat if this is unintentional");
+        } else if (this.chatCredential.getUserName() == null) {
             log.info("TwitchChat: AccessToken does not contain any user information, fetching using the CredentialManager ...");
 
             // credential manager
-            Optional<OAuth2Credential> credential = credentialManager.getOAuth2IdentityProviderByName("twitch").get().getAdditionalCredentialInformation(this.chatCredential.get());
+            Optional<OAuth2Credential> credential = credentialManager.getOAuth2IdentityProviderByName("twitch")
+                .orElse(new TwitchIdentityProvider(null, null, null))
+                .getAdditionalCredentialInformation(this.chatCredential);
             if (credential.isPresent()) {
-                this.chatCredential = credential;
+                this.chatCredential = credential.get();
             } else {
                 log.error("TwitchChat: Failed to get AccessToken Information, the token is probably not valid. Please check the docs Twitch4J -> Chat on how to obtain a valid token.");
             }
@@ -162,24 +227,40 @@ public class TwitchChat implements AutoCloseable {
             .addLimit(this.chatRateLimit)
             .build();
 
+        final LocalBucketBuilder whisperBucketBuilder = Bucket4j.builder();
+        for (Bandwidth bandwidth : whisperRateLimit) {
+            whisperBucketBuilder.addLimit(bandwidth);
+        }
+        this.ircWhisperBucket = whisperBucketBuilder.build();
+
         // connect to irc
         this.connect();
 
         // queue command worker
-        this.queueThread = new Thread(() -> {
+        Runnable queueTask = () -> {
             while (!stopQueueThread) {
                 String command = null;
+                Bucket bucket;
                 try {
                     // wait for queue, only have a timeout set to allow multiple loops to check stopQueueThread
-                    command = ircCommandQueue.poll(this.chatQueueTimeout, TimeUnit.MILLISECONDS);
-                    if(command != null) {
+                    // attempt to grab command from whisper queue before falling back to the general queue
+                    if (!whisperCommandQueue.isEmpty() && ircWhisperBucket.tryConsume(1L)) {
+                        ircWhisperBucket.addTokens(1L);
+                        command = whisperCommandQueue.poll(this.chatQueueTimeout, TimeUnit.MILLISECONDS);
+                        bucket = ircWhisperBucket;
+                    } else {
+                        command = ircCommandQueue.poll(this.chatQueueTimeout, TimeUnit.MILLISECONDS);
+                        bucket = ircMessageBucket;
+                    }
+
+                    if (command != null) {
                         // Send the message, retrying forever until we are connected.
                         while (!stopQueueThread) {
                             if (connectionState.equals(TMIConnectionState.CONNECTED)) {
                                 // block thread, until we can continue
-                                ircMessageBucket.asScheduler().consume(1);
+                                bucket.asScheduler().consume(1);
 
-                                sendCommand(command);
+                                sendTextToWebSocket(command, false);
                                 break;
                             }
                             // Sleep for 25 milliseconds to wait for reconnection
@@ -193,7 +274,7 @@ public class TwitchChat implements AutoCloseable {
                     log.error("Failed to process message from command queue", ex);
 
                     // Reschedule command for processing
-                    if(command != null) {
+                    if (command != null) {
                         try {
                             ircCommandQueue.put(command);
                         } catch (InterruptedException e) {
@@ -203,11 +284,10 @@ public class TwitchChat implements AutoCloseable {
 
                 }
             }
-
-        });
+        };
 
         // Thread will start right now
-        taskExecutor.schedule(this.queueThread, 1L, TimeUnit.MILLISECONDS);
+        this.queueThread = taskExecutor.schedule(queueTask, 1L, TimeUnit.MILLISECONDS);
         log.debug("Started IRC Queue Worker");
 
         // Event Handlers
@@ -253,8 +333,8 @@ public class TwitchChat implements AutoCloseable {
     @Synchronized
     public void disconnect() {
         if (connectionState.equals(TMIConnectionState.CONNECTED)) {
+            sendTextToWebSocket("QUIT", true); // safe disconnect
             connectionState = TMIConnectionState.DISCONNECTING;
-            sendCommand("QUIT"); // safe disconnect
         }
 
         connectionState = TMIConnectionState.DISCONNECTED;
@@ -278,10 +358,11 @@ public class TwitchChat implements AutoCloseable {
     /**
      * Recreate the WebSocket and the listeners
      */
+    @Synchronized
     private void createWebSocket() {
         try {
             // WebSocket
-            this.webSocket = new WebSocketFactory().createSocket(webSocketServer);
+            this.webSocket = webSocketFactory.createSocket(this.baseUrl);
 
             // WebSocket Listeners
             this.webSocket.clearListeners();
@@ -289,33 +370,33 @@ public class TwitchChat implements AutoCloseable {
 
                 @Override
                 public void onConnected(WebSocket ws, Map<String, List<String>> headers) {
-                    log.info("Connecting to Twitch IRC {}", webSocketServer);
-
-                    // if credentials is null, it will automatically disconnect
-                    if (!chatCredential.isPresent()) {
-                        log.error("Can't find credentials for the chat account!");
-                        disconnect();
-                        return; // do not continue script
-                    }
+                    log.info("Connecting to Twitch IRC {}", baseUrl);
 
                     // acquire capabilities
-                    sendCommand("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership");
-                    sendCommand("CAP END");
+                    sendTextToWebSocket("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership", true);
+                    sendTextToWebSocket("CAP END", true);
 
                     // sign in
-                    sendCommand(String.format("pass oauth:%s", chatCredential.get().getAccessToken()));
-                    sendCommand(String.format("nick %s", chatCredential.get().getUserName()));
+                    String userName;
+                    if (chatCredential != null) {
+                        boolean sendRealPass = sendCredentialToThirdPartyHost // check whether this security feature has been overridden
+                            || baseUrl.equalsIgnoreCase(TWITCH_WEB_SOCKET_SERVER) // check whether the url is exactly the official one
+                            || baseUrl.equalsIgnoreCase(TWITCH_WEB_SOCKET_SERVER.substring(0, TWITCH_WEB_SOCKET_SERVER.length() - 4)); // check whether the url matches without the port
+                        sendTextToWebSocket(String.format("pass oauth:%s", sendRealPass ? chatCredential.getAccessToken() : CryptoUtils.generateNonce(30)), true);
+                        userName = chatCredential.getUserName();
+                    } else {
+                        userName = "justinfan" + ThreadLocalRandom.current().nextInt(100000);
+                    }
+                    sendTextToWebSocket(String.format("nick %s", userName), true);
 
                     // Join defined channels, in case we reconnect or weren't connected yet when we called joinChannel
-                    if (!channelCache.isEmpty()) {
-                        for (String channel : channelCache.keySet()) {
-                            sendCommand("join #" + channel);
-                        }
+                    for (String channel : channelCache) {
+                        sendCommand("join", '#' + channel);
                     }
 
                     // then join to own channel - required for sending or receiving whispers
-                    if (chatCredential.get().getUserName() != null) {
-                        sendCommand("join #" + chatCredential.get().getUserName());
+                    if (chatCredential != null && userName != null) {
+                        sendCommand("join", '#' + chatCredential.getUserName());
                     } else {
                         log.warn("Chat: The whispers feature is currently not available because the provided credential does not hold information about the user. Please check the documentation on how to pass the token to the credentialManager where it will be enriched with the required information.");
                     }
@@ -342,7 +423,7 @@ public class TwitchChat implements AutoCloseable {
                                 }
                                 // - Ping
                                 else if(message.contains("PING :tmi.twitch.tv")) {
-                                    sendCommand("PONG :tmi.twitch.tv");
+                                    sendTextToWebSocket("PONG :tmi.twitch.tv", true);
                                     log.debug("Responding to PING request!");
                                 }
                                 // - Login failed.
@@ -397,7 +478,7 @@ public class TwitchChat implements AutoCloseable {
      * @param args command arguments
      */
     protected void sendCommand(String command, String... args) {
-        ircCommandQueue.add(String.format("%s %s", command.toUpperCase(), String.join(" ", args)));
+        ircCommandQueue.offer(String.format("%s %s", command.toUpperCase(), String.join(" ", args)));
     }
 
     /**
@@ -406,22 +487,32 @@ public class TwitchChat implements AutoCloseable {
      * @param command raw irc command
      */
     public void sendRaw(String command) {
-        ircCommandQueue.add(command);
+        ircCommandQueue.offer(command);
     }
 
     /**
-     * Send IRC Command
+     * Send IRC Command (for Login/...)
+     * <p>
+     * Sends important irc commands for login / capabilities and similar.
+     * Will consume tokens to respect the ratelimit, but will bypass the limit if the bucket is empty.
      *
      * @param command IRC Command
+     * @param consumeToken should a token be consumed when sending this text?
      */
-    private void sendCommand(String command) {
-        // will send command if connection has been established
-        if (connectionState.equals(TMIConnectionState.CONNECTED) || connectionState.equals(TMIConnectionState.CONNECTING)) {
-            // command will be uppercase.
-            this.webSocket.sendText(command);
-        } else {
-            log.warn("Can't send IRC-WS Command [{}]", command);
+    private boolean sendTextToWebSocket(String command, Boolean consumeToken) {
+        // will send text only if CONNECTED or CONNECTING
+        if (!connectionState.equals(TMIConnectionState.CONNECTED) && !connectionState.equals(TMIConnectionState.CONNECTING)) {
+            return false;
         }
+
+        // consume tokens if available, but ignore if not as those are important system commands (CAP, Login, ...)
+        if (consumeToken)
+            ircMessageBucket.tryConsume(1L);
+
+        // command will be uppercase.
+        this.webSocket.sendText(command);
+
+        return true;
     }
 
     /**
@@ -429,10 +520,10 @@ public class TwitchChat implements AutoCloseable {
      * @param channelName channel name
      */
     public void joinChannel(String channelName) {
-        if (!channelCache.containsKey(channelName.toLowerCase())) {
-            sendCommand("join", "#" + channelName.toLowerCase());
-            log.debug("Joining Channel [{}].", channelName.toLowerCase());
-            channelCache.put(channelName.toLowerCase(), true);
+        String lowerChannelName = channelName.toLowerCase();
+        if (channelCache.add(lowerChannelName)) {
+            sendCommand("join", "#" + lowerChannelName);
+            log.debug("Joining Channel [{}].", lowerChannelName);
         } else {
             log.warn("Already joined channel {}", channelName);
         }
@@ -443,10 +534,10 @@ public class TwitchChat implements AutoCloseable {
      * @param channelName channel name
      */
     public void leaveChannel(String channelName) {
-        if (channelCache.containsKey(channelName.toLowerCase())) {
-            sendCommand("part", "#" + channelName.toLowerCase());
-            log.debug("Leaving Channel [{}].", channelName.toLowerCase());
-            channelCache.remove(channelName.toLowerCase());
+        String lowerChannelName = channelName.toLowerCase();
+        if (channelCache.remove(lowerChannelName)) {
+            sendCommand("part", "#" + lowerChannelName);
+            log.debug("Leaving Channel [{}].", lowerChannelName);
         } else {
             log.warn("Already left channel {}", channelName);
         }
@@ -459,7 +550,7 @@ public class TwitchChat implements AutoCloseable {
      */
     public void sendMessage(String channel, String message) {
         log.debug("Adding message for channel [{}] with content [{}] to the queue.", channel.toLowerCase(), message);
-        ircCommandQueue.add(String.format("PRIVMSG #%s :%s", channel.toLowerCase(), message));
+        ircCommandQueue.offer(String.format("PRIVMSG #%s :%s", channel.toLowerCase(), message));
     }
 
     /**
@@ -470,7 +561,7 @@ public class TwitchChat implements AutoCloseable {
      */
     public void sendPrivateMessage(String targetUser, String message) {
         log.debug("Adding private message for user [{}] with content [{}] to the queue.", targetUser, message);
-        ircCommandQueue.add(String.format("PRIVMSG #%s :/w %s %s", chatCredential.get().getUserName(), targetUser, message));
+        whisperCommandQueue.offer(String.format("PRIVMSG #%s :/w %s %s", chatCredential.getUserName().toLowerCase(), targetUser, message));
     }
 
     /**
@@ -482,7 +573,7 @@ public class TwitchChat implements AutoCloseable {
      * @param reason reason
      */
     public void timeout(String channel, String user, Duration duration, String reason) {
-        StringBuilder sb = new StringBuilder(user).append(duration.getSeconds());
+        StringBuilder sb = new StringBuilder(user).append(' ').append(duration.getSeconds());
         if (reason != null) {
             sb.append(" ").append(reason);
         }
@@ -548,7 +639,7 @@ public class TwitchChat implements AutoCloseable {
      */
     public void close() {
         this.stopQueueThread = true;
-        this.taskExecutor.remove(this.queueThread);
+        queueThread.cancel(false);
         this.disconnect();
     }
 
@@ -558,7 +649,7 @@ public class TwitchChat implements AutoCloseable {
      * @return boolean
      */
     public boolean isChannelJoined(String channelName) {
-        return channelCache.getOrDefault(channelName, false);
+        return channelCache.contains(channelName.toLowerCase());
     }
 
     /**
@@ -567,6 +658,6 @@ public class TwitchChat implements AutoCloseable {
      * @return List Channel Names
      */
     public List<String> getCurrentChannels() {
-        return Collections.unmodifiableList(new ArrayList<>(channelCache.keySet()));
+        return Collections.unmodifiableList(new ArrayList<>(channelCache));
     }
 }

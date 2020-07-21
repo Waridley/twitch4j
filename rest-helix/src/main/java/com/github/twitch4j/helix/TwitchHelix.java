@@ -67,6 +67,20 @@ public interface TwitchHelix {
     );
 
     /**
+     * Retrieves the list of available Cheermotes, animated emotes to which viewers can assign Bits, to cheer in chat
+     *
+     * @param authToken Auth Token
+     * @param broadcasterId ID for the broadcaster who might own specialized Cheermotes (optional)
+     * @return CheermoteList
+     */
+    @RequestLine("GET /bits/cheermotes?broadcaster_id={broadcaster_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<CheermoteList> getCheermotes(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId
+    );
+
+    /**
      * Gets a ranked list of Bits leaderboard information for an authorized broadcaster.
      *
      * @param authToken Auth Token
@@ -87,23 +101,150 @@ public interface TwitchHelix {
     );
     
     /**
+     * Gets the status of one or more provided codes.
+     * <p>
+     * The API is throttled to one request per second per authenticated user.
+     *
+     * @param authToken App access token. The client ID associated with the app access token must be approved by Twitch as part of a contracted arrangement.
+     * @param code      The code to get the status of. 1-20 code parameters are allowed.
+     * @param userId    Represents a numeric Twitch user ID. The user account which is going to receive the entitlement associated with the code.
+     * @return CodeStatusList
+     */
+    @RequestLine("GET /entitlements/codes?code={code}&user_id={user_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<CodeStatusList> getCodeStatus(
+        @Param("token") String authToken,
+        @Param("code") List<String> code,
+        @Param("user_id") Integer userId
+    );
+
+    /**
+     * Redeems one or more provided codes to the authenticated Twitch user.
+     * <p>
+     * The API is throttled to one request per second per authenticated user.
+     *
+     * @param authToken App access token. The client ID associated with the app access token must be one approved by Twitch.
+     * @param code      The code to redeem to the authenticated user’s account. 1-20 code parameters are allowed.
+     * @param userId    Represents a numeric Twitch user ID. The user account which is going to receive the entitlement associated with the code.
+     * @return CodeStatusList
+     */
+    @RequestLine("POST /entitlements/codes?code={code}&user_id={user_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<CodeStatusList> redeemCode(
+        @Param("token") String authToken,
+        @Param("code") List<String> code,
+        @Param("user_id") Integer userId
+    );
+
+    /**
      * Get Extension Transactions allows extension back end servers to fetch a list of transactions that have occurred for their extension across all of Twitch.
      *
-     * @param authtoken App Access  OAuth Token
+     * @param authToken App Access  OAuth Token
      * @param extensionId ID of the extension to list transactions for.
      * @param transactionIds Transaction IDs to look up. Can include multiple to fetch multiple transactions in a single request. Maximum: 100
      * @param after The cursor used to fetch the next page of data. This only applies to queries without ID. If an ID is specified, it supersedes the cursor.
      * @param limit Maximum number of objects to return. Maximum: 100 Default: 20
      * @return ExtensionTransactionList
      */
-    @RequestLine("GET helix/extensions/transactions?extension_id={extensionId}")
+    @RequestLine("GET /extensions/transactions?after={after}&extension_id={extension_id}&first={first}&id={id}")
     @Headers("Authorization: Bearer {token}")
     HystrixCommand<ExtensionTransactionList> getExtensionTransactions(
-        @Param("token") String authtoken,
+        @Param("token") String authToken,
         @Param("extension_id") String extensionId,
         @Param("id") List<String> transactionIds,
         @Param("after") String after,
         @Param("first") Integer limit
+    );
+
+    /**
+     * Returns a list of games or categories that match the query via name either entirely or partially
+     *
+     * @param authToken Auth Token
+     * @param query the search query
+     * @param limit Maximum number of objects to return. Maximum: 100. Default: 20.
+     * @param after Cursor for forward pagination
+     * @return CategorySearchList
+     */
+    @RequestLine("GET /search/categories?after={after}&first={first}&query={query}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<CategorySearchList> searchCategories(
+        @Param("token") String authToken,
+        @Param("query") String query,
+        @Param("first") Integer limit,
+        @Param("after") String after
+    );
+
+    /**
+     * Gets channel information for users
+     *
+     * @param authToken Auth Token
+     * @param broadcasterIds IDs of the channels to be retrieved
+     * @return ChannelInformationList
+     */
+    @RequestLine("GET /channels?broadcaster_id={broadcaster_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<ChannelInformationList> getChannelInformation(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") List<String> broadcasterIds
+    );
+
+    /**
+     * Modifies channel information for users
+     *
+     * @param authToken Auth Token (scope: user:edit:broadcast)
+     * @param broadcasterId ID of the channel to be updated (required)
+     * @param channelInformation {@link ChannelInformation} (at least one parameter must be provided)
+     * @return 204 No Content upon a successful update
+     */
+    @RequestLine("PATCH /channels?broadcaster_id={broadcaster_id}")
+    @Headers({
+        "Authorization: Bearer {token}",
+        "Content-Type: application/json"
+    })
+    HystrixCommand<Void> updateChannelInformation(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        ChannelInformation channelInformation
+    );
+
+    /**
+     * Returns a list of channels (those that have streamed within the past 6 months) that match the query either entirely or partially
+     *
+     * @param authToken Auth Token
+     * @param query the search query
+     * @param limit Maximum number of objects to return. Maximum: 100. Default: 20.
+     * @param after Cursor for forward pagination
+     * @param liveOnly Filter results for live streams only. Default: false
+     * @return ChannelSearchList
+     */
+    @RequestLine("GET /search/channels?after={after}&first={first}&live_only={live_only}&query={query}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<ChannelSearchList> searchChannels(
+        @Param("token") String authToken,
+        @Param("query") String query,
+        @Param("first") Integer limit,
+        @Param("after") String after,
+        @Param("live_only") Boolean liveOnly
+    );
+
+    /**
+     * Starts a commercial on a specified channel
+     *
+     * @param authToken Auth Token (scope: channel:edit:commercial)
+     * @param broadcasterId ID of the channel requesting a commercial
+     * @param length Desired length of the commercial in seconds. Valid options are 30, 60, 90, 120, 150, 180.
+     * @return CommercialList
+     */
+    @RequestLine("POST /channels/commercial")
+    @Headers({
+        "Authorization: Bearer {token}",
+        "Content-Type: application/json"
+    })
+    @Body("%7B\"broadcaster_id\":\"{broadcaster_id}\",\"length\":{length}%7D")
+    HystrixCommand<CommercialList> startCommercial(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        @Param("length") Integer length
     );
 
     /**
@@ -152,8 +293,20 @@ public interface TwitchHelix {
     );
 
     /**
-     * TODO: Create Entitlement Grants Upload URL
+     * Creates a URL where you can upload a manifest file and notify users that they have an entitlement
+     *
+     * @param authToken App access token
+     * @param manifestId Unique identifier of the manifest file to be uploaded. Must be 1-64 characters.
+     * @param type Type of entitlement being granted. Only "bulk_drops_grant" is supported.
+     * @return UploadEntitlementUrlList
      */
+    @RequestLine("POST /entitlements/upload?manifest_id={manifest_id}&type={type}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<UploadEntitlementUrlList> createEntitlementUploadUrl(
+        @Param("token") String authToken,
+        @Param("manifest_id") String manifestId,
+        @Param("type") String type
+    );
 
     /**
      * Gets game information by game ID or name.
@@ -170,6 +323,86 @@ public interface TwitchHelix {
         @Param("token") String authToken,
         @Param("id") List<String> id,
         @Param("name") List<String> name
+    );
+
+    /**
+     * Gets the information of the most recent Hype Train of the given channel ID.
+     * After 5 days, if no Hype Train has been active, the endpoint will return an empty response
+     *
+     * @param authToken Auth Token (scope: channel:read:hype_train)
+     * @param broadcasterId User ID of the broadcaster (required)
+     * @param limit Maximum number of objects to return. Maximum: 100. Default: 1. (optional)
+     * @param id The id of the wanted event, if known. (optional)
+     * @param cursor Cursor for forward pagination (optional)
+     * @return HypeTrainEventList
+     */
+    @RequestLine("GET /hypetrain/events?broadcaster_id={broadcaster_id}&first={first}&id={id}&cursor={cursor}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<HypeTrainEventList> getHypeTrainEvents(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        @Param("first") Integer limit,
+        @Param("id") String id,
+        @Param("cursor") String cursor
+    );
+
+    /**
+     * Returns all banned and timed-out users in a channel.
+     *
+     * @param authToken     Auth Token (scope: moderation:read)
+     * @param broadcasterId Required: Provided broadcaster_id must match the user_id in the auth token.
+     * @param userId        Optional: Filters the results for only those with a matching user_id. Maximum: 100.
+     * @param after         Optional: Cursor for forward pagination.
+     * @param before        Optional: Cursor for backward pagination.
+     * @return BannedUserList
+     */
+    @RequestLine("GET /moderation/banned?broadcaster_id={broadcaster_id}&user_id={user_id}&after={after}&before={before}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<BannedUserList> getBannedUsers(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        @Param("user_id") List<String> userId,
+        @Param("after") String after,
+        @Param("before") String before
+    );
+
+    /**
+     * Returns all user bans and un-bans in a channel.
+     *
+     * @param authToken     Auth Token (scope: moderation:read)
+     * @param broadcasterId Required: Provided broadcaster_id must match the user_id in the auth token.
+     * @param userId        Optional: Filters the results and only returns a status object for users who are banned in this channel and have a matching user_id. Maximum: 100.
+     * @param after         Optional: Cursor for forward pagination.
+     * @param limit         Optional: Maximum number of objects to return. Maximum: 100. Default: 20.
+     * @return BannedEventList
+     */
+    @RequestLine("GET /moderation/banned/events?broadcaster_id={broadcaster_id}&user_id={user_id}&after={after}&first={first}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<BannedEventList> getBannedEvents(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        @Param("user_id") List<String> userId,
+        @Param("after") String after,
+        @Param("first") Integer limit
+    );
+
+    /**
+     * Determines whether a string message meets the channel’s AutoMod requirements.
+     *
+     * @param authToken     Auth Token (scope: moderation:read)
+     * @param broadcasterId Provided broadcaster_id must match the user_id in the auth token.
+     * @param messages      the messages to be checked
+     * @return AutomodEnforceStatusList
+     */
+    @RequestLine("POST /moderation/enforcements/status?broadcaster_id={broadcaster_id}")
+    @Headers({
+        "Authorization: Bearer {token}",
+        "Content-Type: application/json"
+    })
+    HystrixCommand<AutomodEnforceStatusList> checkAutomodStatus(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId,
+        AutomodEnforceCheckList messages
     );
 
     /**
@@ -257,6 +490,20 @@ public interface TwitchHelix {
     );
 
     /**
+     * Gets the channel stream key for a user
+     *
+     * @param authToken Auth Token (scope: channel:read:stream_key)
+     * @param broadcasterId User ID of the broadcaster
+     * @return StreamKeyList
+     */
+    @RequestLine("GET /streams/key?broadcaster_id={broadcaster_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<StreamKeyList> getStreamKey(
+        @Param("token") String authToken,
+        @Param("broadcaster_id") String broadcasterId
+    );
+
+    /**
      * Gets metadata information about active streams playing Overwatch or Hearthstone. Streams are sorted by number of current viewers, in descending order. Across multiple pages of results, there may be duplicate or missing streams, as viewers join and leave streams.
      * Using user-token or app-token to increase rate limits.
      *
@@ -270,9 +517,11 @@ public interface TwitchHelix {
      * @param userIds     Returns streams broadcast by one or more specified user IDs. You can specify up to 100 IDs.
      * @param userLogins  Returns streams broadcast by one or more specified user login names. You can specify up to 100 names.
      * @return StreamMetadataList
+     * @deprecated <a href="https://discuss.dev.twitch.tv/t/deprecation-of-the-helix-get-streams-metadata-endpoint/26407">Expected to break on/after July 20, 2020</a>
      */
     @RequestLine("GET /streams/metadata?after={after}&before={before}&community_id={community_id}&first={first}&game_id={game_id}&language={language}&user_id={user_id}&user_login={user_login}")
     @Headers("Authorization: Bearer {token}")
+    @Deprecated
     HystrixCommand<StreamMetadataList> getStreamsMetadata(
         @Param("token") String authToken,
         @Param("after") String after,
@@ -327,16 +576,15 @@ public interface TwitchHelix {
      * @return Object       nothing
      */
     @RequestLine("PUT /streams/tags?broadcaster_id={broadcaster_id}")
-    @Headers
-    ({
+    @Headers({
         "Authorization: Bearer {token}",
         "Content-Type: application/json"
     })
     @Body("%7B\"tag_ids\": [{tag_ids}]%7D")
-    HystrixCommand<Object> replaceStreamTags(
+    HystrixCommand<Void> replaceStreamTags(
             @Param("token") String authToken,
             @Param("broadcaster_id") String broadcasterId,
-            @Param(value = "tag_ids", expander = ObjectToJsonExpander.class ) List<UUID> tagIds
+            @Param(value = "tag_ids", expander = ObjectToJsonExpander.class) List<UUID> tagIds
     );
 
     /**
@@ -350,8 +598,7 @@ public interface TwitchHelix {
      * @return StreamMarker
      */
     @RequestLine("POST /streams/markers")
-    @Headers
-    ({
+    @Headers({
         "Authorization: Bearer {token}",
         "Content-Type: application/json"
     })
@@ -460,6 +707,44 @@ public interface TwitchHelix {
     );
 
     /**
+     * Adds a specified user to the followers of a specified channel
+     *
+     * @param authToken Auth Token (scope: user:edit:follows)
+     * @param fromId User ID of the follower
+     * @param toId ID of the channel to be followed by the user
+     * @param allowNotifications Whether the user gets email or push notifications (depending on the user’s notification settings) when the channel goes live. Default value is false
+     * @return 204 No Content upon a successfully created follow
+     */
+    @RequestLine("POST /users/follows")
+    @Headers({
+        "Authorization: Bearer {token}",
+        "Content-Type: application/json"
+    })
+    @Body("%7B\"from_id\":\"{from_id}\",\"to_id\":\"{to_id}\",\"allow_notifications\":{allow_notifications}%7D")
+    HystrixCommand<Void> createFollow(
+        @Param("token") String authToken,
+        @Param("from_id") String fromId,
+        @Param("to_id") String toId,
+        @Param("allow_notifications") boolean allowNotifications
+    );
+
+    /**
+     * Deletes a specified user from the followers of a specified channel
+     *
+     * @param authToken Auth Token (scope: user:edit:follows)
+     * @param fromId User ID of the follower
+     * @param toId Channel to be unfollowed by the user
+     * @return 204 No Content upon a successful deletion from the list of channel followers
+     */
+    @RequestLine("DELETE /users/follows?from_id={from_id}&to_id={to_id}")
+    @Headers("Authorization: Bearer {token}")
+    HystrixCommand<Void> deleteFollow(
+        @Param("token") String authToken,
+        @Param("from_id") String fromId,
+        @Param("to_id") String toId
+    );
+
+    /**
      * Update User
      * <p>
      * Updates the description of a user specified by a Bearer token.
@@ -509,8 +794,22 @@ public interface TwitchHelix {
     );
 
     /**
-     * TODO: Update User Extensions
+     * Updates the activation state, extension ID, and/or version number of installed extensions for a specified user, identified by a Bearer token.
+     * If you try to activate a given extension under multiple extension types, the last write wins (and there is no guarantee of write order).
+     *
+     * @param authToken Auth Token (scope: user:edit:broadcast)
+     * @param extensions {@link ExtensionActiveList}
+     * @return ExtensionActiveList
      */
+    @RequestLine("PUT /users/extensions")
+    @Headers({
+        "Authorization: Bearer {token}",
+        "Content-Type: application/json"
+    })
+    HystrixCommand<ExtensionActiveList> updateUserExtensions(
+        @Param("token") String authToken,
+        ExtensionActiveList extensions
+    );
 
     /**
      * Get Videos
@@ -520,16 +819,16 @@ public interface TwitchHelix {
      * Using user-token or app-token to increase rate limits.
      *
      * @param authToken User or App auth Token, for increased rate-limits
-     * @param id       ID of the video being queried. Limit: 100. If this is specified, you cannot use any of the optional query string parameters below.
-     * @param userId   ID of the user who owns the video. Limit 1.
-     * @param gameId   ID of the game the video is of. Limit 1.
-     * @param language Language of the video being queried. Limit: 1.
-     * @param period   Period during which the video was created. Valid values: "all", "day", "week", "month". Default: "all".
-     * @param sort     Sort order of the videos. Valid values: "time", "trending", "views". Default: "time".
-     * @param type     Type of video. Valid values: "all", "upload", "archive", "highlight". Default: "all".
-     * @param after    Cursor for forward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
-     * @param before   Cursor for backward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
-     * @param limit    Number of values to be returned when getting videos by user or game ID. Limit: 100. Default: 20.
+     * @param id        Required: ID of the video being queried. Limit: 100. If this is specified, you cannot use any of the optional query string parameters below.
+     * @param userId    Required: ID of the user who owns the video. Limit 1.
+     * @param gameId    Required: ID of the game the video is of. Limit 1.
+     * @param language  Optional: Language of the video being queried. Limit: 1.
+     * @param period    Optional: Period during which the video was created. Valid values: "all", "day", "week", "month". Default: "all".
+     * @param sort      Optional: Sort order of the videos. Valid values: "time", "trending", "views". Default: "time".
+     * @param type      Optional: Type of video. Valid values: "all", "upload", "archive", "highlight". Default: "all".
+     * @param after     Optional: Cursor for forward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
+     * @param before    Optional: Cursor for backward pagination: tells the server where to start fetching the next set of results, in a multi-page response.
+     * @param limit     Optional: Number of values to be returned when getting videos by user or game ID. Limit: 100. Default: 20.
      * @return VideoList
      */
     @RequestLine("GET /videos?id={id}&user_id={user_id}&game_id={game_id}&language={language}&period={period}&sort={sort}&type={type}&after={after}&before={before}&first={first}")

@@ -4,14 +4,19 @@ import com.github.philippheuer.events4j.core.EventManager;
 import com.github.philippheuer.events4j.simple.SimpleEventHandler;
 import com.github.twitch4j.chat.TwitchChat;
 import com.github.twitch4j.chat.events.channel.*;
+import com.github.twitch4j.common.enums.SubscriptionPlan;
 import com.github.twitch4j.common.events.domain.EventChannel;
 import com.github.twitch4j.common.events.domain.EventUser;
 import com.github.twitch4j.common.events.user.PrivateMessageEvent;
 import lombok.Getter;
 
+import java.time.Month;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+
+import static com.github.twitch4j.common.util.TwitchUtils.ANONYMOUS_CHEERER;
+import static com.github.twitch4j.common.util.TwitchUtils.ANONYMOUS_GIFTER;
 
 /**
  * IRC Event Handler
@@ -41,19 +46,25 @@ public class IRCEventHandler {
         this.eventManager = twitchChat.getEventManager();
 
         // register event handlers
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannelMessage(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onWhisper(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannelCheer(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannelSubscription(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onClearChat(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannnelClientJoinEvent(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannnelClientLeaveEvent(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannelModChange(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onNoticeEvent(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onHostOnEvent(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onHostOffEvent(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onChannelState(event));
-        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, event -> onRaid(event));
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannelMessage);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onWhisper);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onBitsBadgeTier);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannelCheer);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannelSubscription);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onClearChat);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannnelClientJoinEvent);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannnelClientLeaveEvent);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannelModChange);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onNoticeEvent);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onHostOnEvent);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onHostOffEvent);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onChannelState);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onGiftReceived);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onPayForward);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onRaid);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onUnraid);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onRewardGift);
+        eventManager.getEventHandler(SimpleEventHandler.class).onEvent(IRCMessageEvent.class, this::onRitual);
     }
 
     /**
@@ -94,6 +105,25 @@ public class IRCEventHandler {
     }
 
     /**
+     * ChatChannel Bits Badge Earned Event Parser
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onBitsBadgeTier(IRCMessageEvent event) {
+        if ("USERNOTICE".equals(event.getCommandType()) && "bitsbadgetier".equalsIgnoreCase(event.getTags().get("msg-id"))) {
+            // Load Info
+            EventChannel channel = event.getChannel();
+            EventUser user = event.getUser();
+
+            String thresholdParam = event.getTags().get("msg-param-threshold");
+            int bitsThreshold = thresholdParam != null ? Integer.parseInt(thresholdParam) : -1;
+
+            // Dispatch Event
+            eventManager.publish(new BitsBadgeEarnedEvent(channel, user, bitsThreshold));
+        }
+    }
+
+    /**
      * ChatChannel Cheer (Bits) Event
      * @param event IRCMessageEvent
      */
@@ -107,29 +137,31 @@ public class IRCEventHandler {
                 Integer bits = Integer.parseInt(event.getTags().get("bits"));
 
                 // Dispatch Event
-                eventManager.publish(new CheerEvent(channel, user, message, bits));
+                eventManager.publish(new CheerEvent(channel, user != null ? user : ANONYMOUS_CHEERER, message, bits));
             }
         }
     }
 
     /**
      * ChatChannel Subscription Event
+     *
      * @param event IRCMessageEvent
      */
     public void onChannelSubscription(IRCMessageEvent event) {
-        if (event.getCommandType().equals("USERNOTICE") && event.getTags().containsKey("msg-id")) {
+        final String msgId;
+        if (event.getCommandType().equals("USERNOTICE") && (msgId = event.getTags().get("msg-id")) != null) {
+            EventChannel channel = event.getChannel();
+
             // Sub
-            if(event.getTags().get("msg-id").equalsIgnoreCase("sub") || event.getTags().get("msg-id").equalsIgnoreCase("resub")) {
+            if (msgId.equalsIgnoreCase("sub") || msgId.equalsIgnoreCase("resub")) {
                 // Load Info
-                EventChannel channel = event.getChannel();
                 EventUser user = event.getUser();
                 String subPlan = event.getTagValue("msg-param-sub-plan").get();
-                boolean isResub = event.getTags().get("msg-id").equalsIgnoreCase("resub");
-                Integer cumulativeMonths = (event.getTags().containsKey("msg-param-cumulative-months")) ? Integer.parseInt(event.getTags().get("msg-param-cumulative-months")) : 0;
+                int cumulativeMonths = event.getTags().containsKey("msg-param-cumulative-months") ? Integer.parseInt(event.getTags().get("msg-param-cumulative-months")) : 0;
                 //according to the Twitch docs, msg-param-months is used only for giftsubs, which are handled below
 
                 // twitch sometimes returns 0 months for new subs
-                if(cumulativeMonths == 0) {
+                if (cumulativeMonths == 0) {
                     cumulativeMonths = 1;
                 }
 
@@ -138,37 +170,126 @@ public class IRCEventHandler {
                 Integer streak = event.getTags().containsKey("msg-param-streak-months") ? Integer.parseInt(event.getTags().get("msg-param-streak-months")) : 0;
 
                 // Dispatch Event
-                eventManager.publish(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), cumulativeMonths, false, null, streak));
+                eventManager.publish(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), cumulativeMonths, false, null, streak, null));
             }
             // Receive Gifted Sub
-            else if(event.getTags().get("msg-id").equalsIgnoreCase("subgift")) {
+            else if (msgId.equalsIgnoreCase("subgift") || msgId.equalsIgnoreCase("anonsubgift")) {
                 // Load Info
-                EventChannel channel = event.getChannel();
                 EventUser user = new EventUser(event.getTagValue("msg-param-recipient-id").get(), event.getTagValue("msg-param-recipient-user-name").get());
                 EventUser giftedBy = event.getUser();
                 String subPlan = event.getTagValue("msg-param-sub-plan").get();
-                Integer subStreak = (event.getTags().containsKey("msg-param-months")) ? Integer.parseInt(event.getTags().get("msg-param-months")) : 1;
+                int subStreak = event.getTags().containsKey("msg-param-months") ? Integer.parseInt(event.getTags().get("msg-param-months")) : 1;
 
                 // twitch sometimes returns 0 months for new subs
-                if(subStreak == 0) {
+                if (subStreak == 0) {
                     subStreak = 1;
                 }
 
+                // Handle multi-month gifts
+                String giftMonthsParam = event.getTags().get("msg-param-gift-months");
+                int giftMonths = giftMonthsParam != null ? Integer.parseInt(giftMonthsParam) : 1;
+
                 // Dispatch Event
-                eventManager.publish(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), subStreak, true, giftedBy, 0));
+                eventManager.publish(new SubscriptionEvent(channel, user, subPlan, event.getMessage(), subStreak, true, giftedBy != null ? giftedBy : ANONYMOUS_GIFTER, 0, giftMonths));
             }
             // Gift X Subs
-            else if(event.getTags().get("msg-id").equalsIgnoreCase("submysterygift")) {
+            else if (msgId.equalsIgnoreCase("submysterygift") || msgId.equalsIgnoreCase("anonsubmysterygift")) {
                 // Load Info
-                EventChannel channel = event.getChannel();
                 EventUser user = event.getUser();
                 String subPlan = event.getTagValue("msg-param-sub-plan").get();
                 Integer subsGifted = (event.getTags().containsKey("msg-param-mass-gift-count")) ? Integer.parseInt(event.getTags().get("msg-param-mass-gift-count")) : 0;
                 Integer subsGiftedTotal = (event.getTags().containsKey("msg-param-sender-count")) ? Integer.parseInt(event.getTags().get("msg-param-sender-count")) : 0;
 
                 // Dispatch Event
-                eventManager.publish(new GiftSubscriptionsEvent(channel, user, subPlan, subsGifted, subsGiftedTotal));
+                eventManager.publish(new GiftSubscriptionsEvent(channel, user != null ? user : ANONYMOUS_GIFTER, subPlan, subsGifted, subsGiftedTotal));
             }
+            // Upgrading from a gifted sub
+            else if (msgId.equalsIgnoreCase("giftpaidupgrade") || msgId.equalsIgnoreCase("anongiftpaidupgrade")) {
+                // Load Info
+                EventUser user = event.getUser();
+                String promoName = event.getTagValue("msg-param-promo-name").orElse(null);
+                String giftTotalParam = event.getTags().get("msg-param-promo-gift-total");
+                Integer giftTotal = giftTotalParam != null ? Integer.parseInt(giftTotalParam) : null;
+                String senderLogin = event.getTagValue("msg-param-sender-login").orElse(null);
+                String senderName = event.getTagValue("msg-param-sender-name").orElse(null);
+
+                // Dispatch Event
+                eventManager.publish(new GiftSubUpgradeEvent(channel, user, promoName, giftTotal, senderLogin, senderName));
+            }
+            // Upgrading from a Prime sub to a normal one
+            else if (msgId.equalsIgnoreCase("primepaidupgrade")) {
+                // Load Info
+                EventUser user = event.getUser();
+                SubscriptionPlan subPlan = event.getTagValue("msg-param-sub-plan").map(SubscriptionPlan::fromString).orElse(null);
+
+                // Dispatch Event
+                eventManager.publish(new PrimeSubUpgradeEvent(channel, user, subPlan));
+            }
+            // Extend Subscription
+            else if (msgId.equalsIgnoreCase("extendsub")) {
+                // Load Info
+                EventUser user = event.getUser();
+                SubscriptionPlan subPlan = event.getTagValue("msg-param-sub-plan").map(SubscriptionPlan::fromString).orElse(null);
+
+                String cumMonthsParam = event.getTags().get("msg-param-cumulative-months");
+                int cumulativeMonths = cumMonthsParam != null ? Math.max(Integer.parseInt(cumMonthsParam), 1) : 1;
+
+                String endMonthParam = event.getTags().get("msg-param-sub-benefit-end-month");
+                Month endMonth = endMonthParam != null ? Month.of(Integer.parseInt(endMonthParam)) : null;
+
+                // Dispatch Event
+                eventManager.publish(new ExtendSubscriptionEvent(channel, user, subPlan, cumulativeMonths, endMonth));
+            }
+        }
+    }
+
+    /**
+     * ChatChannel Prime Community Gift Event Parser: user receives a gift from a prime member
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onGiftReceived(IRCMessageEvent event) {
+        if ("USERNOTICE".equals(event.getCommandType()) && "primecommunitygiftreceived".equalsIgnoreCase(event.getTags().get("msg-id"))) {
+            // Load Info
+            EventChannel channel = event.getChannel();
+            EventUser user = event.getUser();
+            String giftName = event.getTagValue("msg-param-gift-name").orElse(null);
+            String recipientName = event.getTagValue("msg-param-recipient").orElse(null);
+
+            // Dispatch Event
+            eventManager.publish(new PrimeGiftReceivedEvent(channel, user, giftName, recipientName));
+        }
+    }
+
+    /**
+     * ChatChannel Pay Forward Event Parser: user pays forward a gift they previously received
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onPayForward(IRCMessageEvent event) {
+        String msgId;
+        if ("USERNOTICE".equals(event.getCommandType()) && (msgId = event.getTags().get("msg-id")) != null
+            && (msgId.equalsIgnoreCase("standardpayforward") || msgId.equalsIgnoreCase("communitypayforward"))) {
+            // Load Info
+            EventChannel channel = event.getChannel();
+            EventUser user = event.getUser();
+
+            // Present for both standard & community when not anonymous
+            String gifterId = event.getTagValue("msg-param-prior-gifter-id").orElse(null);
+            String gifterName = gifterId != null
+                ? event.getTagValue("msg-param-prior-gifter-user-name").orElseGet(() -> event.getTagValue("msg-param-prior-gifter-display-name").orElse(null))
+                : null;
+            EventUser gifter = gifterId != null ? new EventUser(gifterId, gifterName) : null;
+
+            // Only present for standard
+            String recipientId = msgId.charAt(0) == 's' ? event.getTagValue("msg-param-recipient-id").orElse(null) : null;
+            String recipientName = recipientId != null
+                ? event.getTagValue("msg-param-recipient-user-name").orElseGet(() -> event.getTagValue("msg-param-recipient-display-name").orElse(null))
+                : null;
+            EventUser recipient = recipientId != null ? new EventUser(recipientId, recipientName) : null;
+
+            // Dispatch Event
+            eventManager.publish(new PayForwardEvent(channel, user, gifter, recipient));
         }
     }
 
@@ -188,6 +309,61 @@ public class IRCEventHandler {
                 viewers = 0;
             }
             eventManager.publish(new RaidEvent(channel, raider, viewers));
+        }
+    }
+
+    /**
+     * ChatChannel Unraid Parser: raid cancellation
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onUnraid(IRCMessageEvent event) {
+        if ("USERNOTICE".equals(event.getCommandType()) && "unraid".equalsIgnoreCase(event.getTags().get("msg-id"))) {
+            eventManager.publish(new RaidCancellationEvent(event.getChannel()));
+        }
+    }
+
+    /**
+     * ChatChannel Reward Gift Event Parser: monetary event triggered emotes to be shared
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onRewardGift(IRCMessageEvent event) {
+        if ("USERNOTICE".equals(event.getCommandType()) && "rewardgift".equalsIgnoreCase(event.getTags().get("msg-id"))) {
+            // Load Info
+            EventChannel channel = event.getChannel();
+            EventUser user = event.getUser();
+            String domain = event.getTagValue("msg-param-domain").orElse(null);
+            String triggerType = event.getTagValue("msg-param-trigger-type").orElse(null);
+
+            String selectedCountParam = event.getTags().get("msg-param-selected-count");
+            Integer selectedCount = selectedCountParam != null ? Integer.parseInt(selectedCountParam) : null;
+
+            String totalRewardCountParam = event.getTags().get("msg-param-total-reward-count");
+            Integer totalRewardCount = totalRewardCountParam != null ? Integer.parseInt(totalRewardCountParam) : null;
+
+            String triggerAmountParam = event.getTags().get("msg-param-trigger-amount");
+            Integer triggerAmount = triggerAmountParam != null ? Integer.parseInt(triggerAmountParam) : null;
+
+            // Dispatch Event
+            eventManager.publish(new RewardGiftEvent(channel, user, domain, triggerType, selectedCount, totalRewardCount, triggerAmount));
+        }
+    }
+
+    /**
+     * ChatChannel Ritual Event Parser: celebration of a shared viewer milestone
+     *
+     * @param event the {@link IRCMessageEvent} to be checked
+     */
+    public void onRitual(IRCMessageEvent event) {
+        if ("USERNOTICE".equals(event.getCommandType()) && "ritual".equalsIgnoreCase(event.getTags().get("msg-id"))) {
+            // Load Info
+            EventChannel channel = event.getChannel();
+            EventUser user = event.getUser();
+            String ritualName = event.getTagValue("msg-param-ritual-name").orElse(null);
+
+            // Dispatch Event
+            eventManager.publish(new RitualEvent(channel, user, ritualName));
         }
     }
 

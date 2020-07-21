@@ -7,6 +7,7 @@ import com.github.philippheuer.events4j.core.EventManager;
 import com.github.twitch4j.auth.TwitchAuth;
 import com.github.twitch4j.chat.TwitchChat;
 import com.github.twitch4j.chat.TwitchChatBuilder;
+import com.github.twitch4j.common.config.ProxyConfig;
 import com.github.twitch4j.common.config.Twitch4JGlobal;
 import com.github.twitch4j.common.util.ThreadUtils;
 import com.github.twitch4j.graphql.TwitchGraphQL;
@@ -22,6 +23,7 @@ import com.github.twitch4j.tmi.TwitchMessagingInterfaceBuilder;
 import io.github.bucket4j.Bandwidth;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.RandomStringUtils;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -145,6 +147,14 @@ public class TwitchClientBuilder {
     private long chatQueueTimeout = 1000L;
 
     /**
+     * Sets the default server used for chat
+     * <p>
+     * Defaults to TwitchChat.TWITCH_WEB_SOCKET_SERVER, you can use TwitchChat.FDGT_TEST_SOCKET_SERVER for testing
+     */
+    @With
+    private String chatServer = TwitchChat.TWITCH_WEB_SOCKET_SERVER;
+
+    /**
      * CredentialManager
      */
     @With
@@ -167,6 +177,12 @@ public class TwitchClientBuilder {
      */
     @With
     private OAuth2Credential defaultAuthToken = null;
+
+    /**
+     * Proxy Configuration
+     */
+    @With
+    private ProxyConfig proxyConfig = null;
 
     /**
      * With a CommandTrigger
@@ -205,9 +221,20 @@ public class TwitchClientBuilder {
             eventManager.autoDiscovery();
         }
 
-        // Default ScheduledThreadPoolExecutor
-        if(scheduledThreadPoolExecutor == null)
-            scheduledThreadPoolExecutor = ThreadUtils.getDefaultScheduledThreadPoolExecutor();
+        // Determinate required threadPool size
+        int poolSize = TwitchClientHelper.REQUIRED_THREAD_COUNT;
+        if (enableChat)
+            poolSize = poolSize + TwitchChat.REQUIRED_THREAD_COUNT;
+        if (enablePubSub)
+            poolSize = poolSize + TwitchPubSub.REQUIRED_THREAD_COUNT;
+
+        // check a provided threadPool or initialize a default one
+        if (scheduledThreadPoolExecutor != null && scheduledThreadPoolExecutor.getCorePoolSize() < poolSize) {
+            log.warn("Twitch4J requires a scheduledThreadPoolExecutor with at least {} threads to be fully functional! Some features may not work as expected.", poolSize);
+        }
+        if (scheduledThreadPoolExecutor == null) {
+            scheduledThreadPoolExecutor = ThreadUtils.getDefaultScheduledThreadPoolExecutor("twitch4j-"+ RandomStringUtils.random(4, true, true), poolSize);
+        }
 
         // Module: Helix
         TwitchHelix helix = null;
@@ -216,8 +243,10 @@ public class TwitchClientBuilder {
                 .withClientId(clientId)
                 .withClientSecret(clientSecret)
                 .withUserAgent(userAgent)
+                .withDefaultAuthToken(defaultAuthToken)
                 .withRequestQueueSize(requestQueueSize)
                 .withTimeout(timeout)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
@@ -230,6 +259,7 @@ public class TwitchClientBuilder {
                 .withUserAgent(userAgent)
                 .withRequestQueueSize(requestQueueSize)
                 .withTimeout(timeout)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
@@ -242,6 +272,7 @@ public class TwitchClientBuilder {
                 .withUserAgent(userAgent)
                 .withRequestQueueSize(requestQueueSize)
                 .withTimeout(timeout)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
@@ -255,8 +286,10 @@ public class TwitchClientBuilder {
                 .withChatQueueSize(chatQueueSize)
                 .withChatRateLimit(chatRateLimit)
                 .withScheduledThreadPoolExecutor(scheduledThreadPoolExecutor)
+                .withBaseUrl(chatServer)
                 .withChatQueueTimeout(chatQueueTimeout)
                 .withCommandTriggers(commandPrefixes)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
@@ -266,6 +299,7 @@ public class TwitchClientBuilder {
             pubSub = TwitchPubSubBuilder.builder()
                 .withEventManager(eventManager)
                 .withScheduledThreadPoolExecutor(scheduledThreadPoolExecutor)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
@@ -276,12 +310,12 @@ public class TwitchClientBuilder {
                 .withEventManager(eventManager)
                 .withClientId(clientId)
                 .withClientSecret(clientSecret)
+                .withProxyConfig(proxyConfig)
                 .build();
         }
 
         // Module: TwitchClient & ClientHelper
         final TwitchClient client = new TwitchClient(eventManager, helix, kraken, tmi, chat, pubSub, graphql, scheduledThreadPoolExecutor);
-        client.getClientHelper().setDefaultAuthToken(defaultAuthToken);
         client.getClientHelper().setThreadRate(helperThreadRate);
 
         // Return new Client Instance
